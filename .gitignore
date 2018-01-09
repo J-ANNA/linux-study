@@ -1,1 +1,3 @@
 test3.txt
+/ignoreDir/
+!/ignoreDir/noignore.txt
