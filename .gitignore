@@ -1,6 +1,4 @@
 test3.txt
 /ignoreDir/
-!/ignoreDir/noignore.txt
-!/ignoreDir/1.txt
-!/ignoreDir/*
+
 
