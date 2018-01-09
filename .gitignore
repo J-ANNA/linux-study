@@ -4,5 +4,3 @@ test3.txt
 !/ignoreDir/1.txt
 !/ignoreDir/*
 
-/ig2/
-!/ig2/1.txt
