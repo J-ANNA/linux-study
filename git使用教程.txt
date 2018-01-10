@@ -1,1 +1,236 @@
-s
+一、安装git
+Ubuntu 安装 Git：  apt-get install git  
+CentOS 安装 Git：  yum install git 
+查看 Git 版本信息：  git version
+配置git用户信息：
+git config --global user.name "git用户名"
+git config --global user.email "git绑定邮箱"
+
+二、 开启SSH服务
+如果是使用CentOS,则默认开启了SSH服务，可跳过
+Ubuntu 安装SSH: apt-get install git
+查看SSH状态： ps -e | grep sshd
+
+三、生成SSH KEY
+查看SSH KEY是否存在：ls -al ~/.ssh  若存在则忽略这一步
+生成SSH KEY：ssh-keygen -t rsa -C "git账户绑定的邮箱"
+中间 直接回车继续即可
+
+===SSH KEY=======
+查看SSH KEY
+进入 /root/.ssh 查看 id_rsa 和 id_rsa.pub
+cd /root/.ssh
+ls -a
+复制SSH KEY
+打开 id_rsa.pub文件，复制全部内容
+vim id_rsa.pub
+(SSH KEY 公钥，用于github验证身份)
+添加SSH KEY 
+登录github,打开personal settings页面，选择SSH and GPG keys选项，选择 Add SSH key,粘贴复制板上的内容
+添加SSH key 后，Linux就可以建立本地Git与GitHub的连接
+
+======github=====
+在github上新建仓库
+克隆到本地：git clone git@github.com:woider/baidu.git   //最后一个参数为仓库的ssh地址或者https地址
+推送步骤：
+git add .    //将当前工作目录中更改或者新增的文件加入到Git的索引中
+git commit -m "版本更新说明"  //提交到本地
+git psuh origin master    //推送到github 远程仓库
+
+参考链接：https://www.cnblogs.com/woider/p/6533709.html
+
+
+
+======git详细使用教程=======
+ 1. Git概念 
+1.1. Git库中由三部分组成 
+ Git 仓库就是那个.git 目录，其中存放的是我们所提交的文档索引内容，Git 可基于文档索引内容对其所管理的文档进行内容追踪，从而实现文档的版本控制。.git目录位于工作目录内。 
+1） 工作目录：用户本地的目录； 
+2） Index（索引）：将工作目录下所有文件（包含子目录）生成快照，存放到一个临时的存储区域，Git 称该区域为索引。 
+3） 仓库：将索引通过commit命令提交至仓库中，每一次提交都意味着版本在进行一次更新。 
+
+1.2. 使用Git时的初始化事项 
+1.2.1. Git初始化配置 
+1） 配置使用git仓库的人员姓名 
+       git config --global user.name "Your Name Comes Here" 
+2） 配置使用git仓库的人员email 
+       git config --global user.email you@yourdomain.example.com 
+
+1.2.2. Git文档忽略机制 
+工作目录中有一些文件是不希望接受Git 管理的，譬如程序编译时生成的中间文件等等。Git 提供了文档忽略机制，可以将工作目录中不希望接受Git 管理的文档信息写到同一目录下的.gitignore 文件中。
+========================================================================
+主要有三种方法：
+1）第一种方法
+针对单一工程排除文件，这种方式会让这个工程的所有修改者在克隆代码的同时，也能克隆到过滤规则，而不用自己再写一份，这就能保证所有修改者应用的都是同一份规则，而不是张三自己有一套过滤规则，李四又使用另一套过滤规则，个人比较喜欢这个。配置步骤如下：
+
+在工程根目录下建立.gitignore文件，将要排除的文件或目录 写到.gitignore这个文件中，其中有两种写入方法。
+a)使用命令行增加排除文件
+排除以.class结尾的文件 echo “*.class” >.gitignore (>> 是在文件尾增加,> 是删除已经存在的内容再增加)，之后会在当前目录下生成一个.gitignore的文件。
+排除bin目录下的文件 echo “bin/” >.gitignore
+b)最方便的办法是，用记事本打开，增加需要排除的文件或目录，一行增加一个，例如：
+*.class
+*.apk
+bin/
+gen/
+.settings/
+proguard/
+
+一个目录中只保留一个文件其它文件忽略的做法
+!/ignoreDir
+/ignoreDir/*
+!/ignoreDir/noignore.txt
+
+2）第二种方法
+全局设置排除文件，这会在全局起作用，只要是Git管理的工程，在提交时都会自动排除不在控制范围内的文件或目录。这种方法对开发者来说，比较省事，只要一次全局配置，不用每次建立工程都要配置一遍过滤规则。但是这不保证其他的开发者在克隆你的代码后，他们那边的规则跟你的是一样的，这就带来了代码提交过程中的各种冲突问题。
+配置步骤如下：
+a）像方法（1）一样，也需要建立一个.gitignore文件，把要排除的文件写进去。
+b）但在这里，我们不规定一定要把.gitnore文件放到某个工程下面，而是任何地方，比如我们这里放到了Git默认的Home路径下，比如：/home/wangshibo/hqsb_ios
+c）使用命令方式可以配置全局排除文件 git config --global core.excludesfile ~/.gitignore，你会发现在~/.gitconfig文件中会出现excludesfile = /home/wangshibo/hqsb_ios/.gitignore。
+说明Git把文件过滤规则应用到了Global的规则中。
+
+3）第三种方法
+单个工程设置排除文件，在工程目录下找到.git/info/exclude，把要排除的文件写进去：
+*.class
+*.apk
+bin/
+gen/
+.settings/
+proguard/
+
+这种方法就不提倡了，只能针对单一工程配置，而且还不能将过滤规则同步到其他开发者，跟方法（1）（2）比较起来没有一点优势。	
+
+===.gitignore 不生效的原因及解决办法=======
+有时候在项目开发过程中，突然心血来潮想把某些目录或文件加入忽略规则，按照上述方法定义后发现并未生效，原因是.gitignore只能忽略那些原来没有被track的文件，如果某些文件已经被纳入了版本管理中，则修改.gitignore是无效的。那么解决方法就是先把本地缓存删除（改变成未track状态），然后再提交：
+
+git rm -r --cached .
+git add .
+git commit -m 'update .gitignore'
+
+参考链接：https://www.cnblogs.com/kevingrace/p/5690241.html
+==============================================================
+
+
+1.3. Git与Repo的比较 
+       Git操作一般对应一个仓库，而Repo操作一般对应一个项目，即一个项目会由若干仓库组成。 
+例如，在操作整个Recket项目时使用Repo，而操作其中的某个仓库时使用Git。在包含隐藏目录.git的目录下执行git操作。
+
+
+2. Git help 
+       Git help 获取git基本命令 
+（如果要知道某个特定命令的使用方法，例如：使用Git help clone，来获取git clone的使用方法）
+
+
+3. Git本地操作基本命令 
+3.1. Git init 
+或者使用git init-db。  
+创建一个空的Git库。在当前目录中产生一个.git 的子目录。以后，所有的文件变化信息都会保存到这个目录下，而不像CVS那样，会在每个目录和子目录下都创建一个CVS目录。 
+在.git目录下有一个config文件，可以修改其中的配置信息。 
+3.2. Git add 
+将当前工作目录中更改或者新增的文件加入到Git的索引中，加入到Git的索引中就表示记入了版本历史中，这也是提交之前所需要执行的一步。 
+可以递归添加，即如果后面跟的是一个目录作为参数，则会递归添加整个目录中的所有子目录和文件。例如： 
+       git add dir1 （ 添加dir1这个目录，目录下的所有文件都被加入 ） 
+       Git add f1 f2 （ 添加f1，f2文件） 
+       git add .      ( 添加当前目录下的所有文件和子目录 )  [建议使用]
+
+3.3. Git rm
+从当前的工作目录中和索引中删除文件
+可以递归删除，即如果后面跟的是一个目录作为参数，则会递归删除整个目录中的所有子目录和文件，例如：
+	git rm -r *  //删除该目录中的所有子目录和文件
+	git rm f1  //删除f1文件，包含本地目录和index中的此文件记录
+	git rm --ached f1  //不会删除本来目录文件，只删除index中的文件记录，将已经git add的文件remove到cache中，这样commit时不会提交这个文件，适用于一下添加了很多个文件，却又想排除其中个别几个文件的情况
+
+3.4 Git commit
+3.4. Git commit 
+提交当前工作目录的修改内容。 
+直接调用git commit命令，会提示填写注释。通过如下方式在命令行就填写提交注释：git commit -m "Initial commit of gittutor reposistory"。 注意，和CVS不同，git的提交注释必须不能为空，否则就会提交失败。 
+       git commit还有一个 -a的参数，可以将那些没有通过git add标识的变化一并强行提交，但是不建议使用这种方式。 
+每一次提交，git就会为全局代码建立一个唯一的commit标识代码，用户可以通过git reset命令恢复到任意一次提交时的代码。 
+       git commit –-amend –m “message” （在一个commit id上不断修改提交的内容） 
+
+3.5. Git status 
+查看版本库的状态。可以得知哪些文件发生了变化，哪些文件还没有添加到git库中等等。 建议每次commit前都要通过该命令确认库状态。 
+最常见的误操作是， 修改了一个文件， 没有调用git add通知git库该文件已经发生了变化就直接调用commit操作， 从而导致该文件并没有真正的提交。这时如果开发者以为已经提交了该文件，就继续修改甚至删除这个文件，那么修改的内容就没有通过版本管理起来。如果每次在 提交前，使用git status查看一下，就可以发现这种错误。因此，如果调用了git status命令，一定要格外注意那些提示为 “Changed but not updated:”的文件。 这些文件都是与上次commit相比发生了变化，但是却没有通过git add标识的文件。 
+范例：
+git status
+
+3.6. Git log 
+查看历史日志，包含每次的版本变化。每次版本变化对应一个commit id。 
+       Git log -1 
+       -1的意思是只显示一个commit，如果想显示5个，就-5。不指定的话，git log会从该commit一直往后显示。 
+       Git log --stat –summary （显示每次版本的详细变化） 
+在项目日志信息中，每条日志的首行（就是那一串字符）为版本更新提交所进行的命名，我们可以将该命名理解为项目版本号。项目版本号应该是唯一的，默认由 Git 自动生成，用以标示项目的某一次更新。如果我们将项目版本号用作git-show 命令的参数，即可查看该次项目版本的更新细节。
+范例：
+git log -5 
+git show 1fe68b5c5fb390bcb392046fe9a5ead844ddf5a5   
+git show 1fe68  //一般只使用版本号的前几个字符即可
+git show HEAD^  //查看HEAD的父版本的更新细节
+git show HEAD^^ //查看倒数第二个版本的更新细节
+git show HEAD-4  //查看倒数第四个版本的更新细节
+git tag v0.1 1fe68  //可以对版本号自定义，然后通过自定义版本号查看版本更新细节
+实际上，上述的命令并非真正的进行版本号自定义，只是制造了一个tag对象而已，这在进行项目版本对外发布时比较有用
+
+
+3.7. Git merge 
+把服务器上下载下来的代码和本地代码合并。或者进行分支合并。 
+范例：
+当前在master分支上，若想将分支dev上的合并到master上，则git merge dev 
+注意：git merge nov/eclair_eocket （是将服务器git库的eclair_eocket分支合并到本地分支上） 
+       git rebase nov/eclair_eocket （是将服务器git库的eclair_eocket分支映射到本地的一个临时分支上，然后将本地分支上的变化合并到这个临时分支，然后再用这个临时分支初始化本地分支） 
+
+3.8. Git diff 
+把本地的代码和index中的代码进行比较，或者是把index中的代码和本地仓库中的代码进行比较。 
+1） Git diff 
+比较工作目录和Index中的代码。 
+2） Git diff --cached 
+比较index和本地仓库中的代码。
+
+3.9. Git checkout 
+3.9.1. 切换到分支 
+1) 创建一个新分支，并切换到该分支上 
+       Git checkout –b 新分支名 
+2）切换到某个已经建立的本地分支local_branch 
+       Git checkout local_branch 
+（使用cat .git/HEAD后，显示refs:refs/heads/ local_branch） 
+3) 切换到服务器上的某个分支remote_branch 
+       Git checkout remote_branch 
+（远程分支remote_branch可以通过 git branch –r 列出） 
+4) 切换到某个commit id 
+       Git checkout commit_id 
+（使用cat .git/HEAD后，显示commit_id） 
+5) 切换到某个tag 
+       Git checkout tag 
+（使用cat .git/HEAD后，显示tag） 
+注意： 除了1）和2）外，其余三种都只是切换到了一个临时的( no branch )状态 （this head is detached），这时用 git branch 可以看到处于（no branch）上， cat .git/HEAD 看到指向相应的commit id。 这个（no branch）只是临时存在的，并不是一个真正建立的branch。 如果此时执行2），则这个（no branch）就自动消失了；如果执行1）， 则创建新分支 new branch，并把这个(no branch)挂到这个新分支上，此时cat .git/refs/heads/new_branch 可以看到已经指向了刚才那个commit id。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
