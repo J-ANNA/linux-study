@@ -1,0 +1,172 @@
+Linux 的 Ext2 文件系统
+
+data block(数据块）:
+Ext2文件系统中所支持的block大小有 1kb,2kb,4kb三种。
+block大小                1kb             2kb             4kb
+最大单一文件限制          16GB           256GB            2TB
+最大文件系统总容量        2TB             8TB             16TB
+
+Ext2文件系统的block的基本限制：
+1）原则上，block的大小与数量在格式化完就不能再改变了（除非重新格式化）；
+2）每个block内最多只能够放置一个文件的数据；
+3）承上，如果文件大于 block 的大小，则一个文件会占用多个 block 数量；
+4）承上，若文件小于 block,则该block剩余空间就不能够再被使用了（磁盘空间会浪费）。
+
+inodetable (inode 表格）
+inode的内容主要记录文件的属性以及该文件实际数据是放置在哪几号block内。基本上，inode记录的文件数据至少有下面这些：
+1）该文件的访问模式（read/write/excute);
+2) 该文件的所有者与组（owner/group);
+3) 该文件的大小；
+4）该文件创建或状态改变的时间（ctime);
+5) 最近一次的读取时间（atime);
+6) 定义文件特性的标志（flag),如 SetUID等；
+该文件真正内容的指向（pointer);
+
+inode的特色：
+1）每个inode大小均固定为128bytes;
+2) 每个文件都仅会占用一个 inode 而已；
+3）承上，因此文件系统能够创建的文件数量与 inode 的数量有关；
+4）系统读取文件时需要先找到 inode,并分析 inode 所记录的权限与用户是否符合，若符合才能够开始实际读取 block 的内容。
+5）将 inode 记录 block 号码区域定义为12个直接、一个间接、一个双间接、一个三间接记录区：
+   因此最大文件大小为  = 12 + 256 + 256x256 + 256x256x256 (x1k) = 16GB
+   (该计算方法不适用于2KB及4KB的block大小的计算，因为大于2KB的block将会受到Ext2文件系统本省的限制，所以计算的结果会不太符合之故）
+
+
+Superblock(超级块）：
+Superblock 是记录整个文件系统相关信息的地方，没有Superblock,就没有这个文件系统了。
+它记录的信息主要有：
+1）block 与 inode 的总量；
+2）未使用与已使用的 inode/block 数量；
+3）block 与 inode 的大小（block 为 1K,2K,4K, inode 为 128bytes);
+4) 文件系统的挂载时间、最近一次写入数据的时间，最近一次检验磁盘（fsck)的时间等文件系统的相关信息；
+5）一个valid bit数值，若此文件系统已被挂载，则 valid bit 为 0；若未被挂载，则 valid bit 为 1。
+
+
+File system Description (文件系统描述说明)
+
+block bitmap (块对照表)
+
+inode bitmap (inode 对照表）
+
+
+每个区段与Supernlock 的信息都可以使用 dumpe2fs 这个命令来查询。
+dumpe2fs [-bh] 设备文件名
+参数：
+-b: 列出保留为坏道的部分；
+-h: 仅列出 superblock 的数据，不会列出其他的区段内容。
+
+范例：
+df       //这个命令可以调出目前挂载的设备
+
+dumpe2fs /dev/hdc2
+
+
+磁盘与目录的容量： df， du
+df: 列出文件系统的整体磁盘使用量；
+du: 评估文件系统的磁盘使用量(常用于评估目录所占容量）
+
+df
+df [-ahikHTm] 目录或文件名
+参数：
+-a: 列出所有的文件系统，包括系统特有的 /proc等文件系统；
+-k: 以KB的容量显示各文件系统；
+-m: 以MB的容量显示各文件系统；
+-h: 以人们较易阅读的 GB、MB、KB等格式自行显示；
+-H: 以M=1000K 替代 M=1024K的进制方式；
+-T: 连同该分区的文件系统名称（例如 ext3)也列出；
+-i: 不用硬盘容量，而以 inode 的数量来显示。
+
+范例：
+df
+df -h
+df -aT
+df -h /etc
+df -ih
+
+
+du:
+du [-ahskm] 文件或目录名称
+选项与参数：
+-a: 列出所有的文件与目录容量，因为默认仅统计目录下面的文件量而已；
+-h: 以人们较易读的容量格式(G/M)显示；
+-s: 列出总量而已，而不列出每个个别的目录占用容量；
+-S: 不包括子目录下的总计，与 -s 有点差别；
+-k: 以KB列出容量显示；bb 
+-m: 以MB列出容量显示。
+
+范例：
+du
+du -a
+du -sm /*
+
+
+连接文件：ln
+hard link (硬连接或实际连接)
+只是在某个目录下新建一条文件名连接到某inode号码的关联记录而已。
+范例：
+ln /etc/crontab .
+ll -i /etc/crontab /root/crontab
+
+hard link 的限制：
+1.不能跨文件系统；
+2.不能连接到目录。
+
+
+symbolic link (符号连接，也即是快捷方式）
+就是在创建一个独立的文件，而这个文件会让数据的读取指向它连接的那个文件的文件名。
+范例：
+ln -s /etc/crontab crontab
+ln -i /etc/crontab /root/crontab2
+
+
+ln [-sf] 源文件 目标文件
+参数：
+-s: 如果不加任何参数就进行连接，那就是 hard link，至于 -s 就是 symbolic link
+-f: 如果目标文件存在时，就主动将目标文件直接删除后再创建
+
+范例：
+cd /tmp
+cp -a /etc/passwd .
+du -sb; df -i .
+
+
+ln passwd passwd-hd
+du -sb; df -i .
+
+
+ls -il passwd*
+
+ln -s passwd passwd-so
+ls -li passwd*
+
+du -sb; df -i .
+
+
+rm passwd           //passwd-so变为红色 说明连接不存在（若存在为绿色）
+cat passwd -hd
+
+cat -passwd-so
+
+ll passwd*
+
+
+关于目录的连接数量：
+当我们新建一个新的目录时，新的目录的连接数为2，而上层目录的连接数则会增加1.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
