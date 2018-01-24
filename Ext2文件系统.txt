@@ -156,6 +156,122 @@ ll passwd*
 
 
 
+删除磁盘分区
+1. fdisk/dev/hdc: 先进入fdisk界面；
+2. p: 先看一下分区的信息，假设要删掉 /dev/hdc1;
+3. d: 选择要删除的分区，比如 1；
+4. w(or)q: 按 w 可存储到磁盘数据中，并离开 fdisk; 按 q 取消刚的操作并离开。
+
+范例：
+fdisk /dev/hdc
+p
+d
+4
+w
+
+新增磁盘分区
+新增主分区：
+fdisk /dev/hdc
+n
+p
+4
+[enter]       //开始柱面
++512M         //结束柱面
+p
+
+新增扩展分区   //扩展分区只能有一个
+n
+e
+1
+[enter]   //开始柱面
+5005       //提示最大值，扩展分区最好能够包含所有未分区的区间
+p
+
+新增一个 2G 逻辑分区
+n
+l
+[enter]
++2048M
+p
+
+
+partprobe  //强制让内核重新找一次分区表
+
+
+磁盘格式化
+mkfs  (即 make file system)
+mkfs [-t 文件系统格式] 设备文件名
+
+范例：
+mkfs -t ext3 /dev/hdc6
+（filesystem label=         //分区的名称
+Block size=4096 (log=2)         //block 的大小设置为 4K
+251392 inodes, 502023 blocks    //由此设置决定的 inode / block 数量
+Creating journal (8192 blocks) : done  //有日志记录） 为提示信息
+
+设置具体参数：
+mke2fs:
+mke2fs [-b block大小] [-i block大小] [-L 卷标] [-cj] 设备
+参数：
+-b: 可以设置每个 block 的大小，目前支持 1024,2048,4096 bytes 三种；
+-i: 多少容量给予一个inode;
+-c: 检查磁盘错误，仅下达一次 -c 时，会进行快速读取测试；
+    如果下达两次 -c -c 的话，会测试读写（read-write)；
+-L: 后面可以接卷标名称(label),这个 label 是有用的；
+-j: 本来 mke2fs 是 EXT2,加上 -j 后，会主动加入journal 而成为 EXT3.
+
+范例：
+mke2fs -j -L "vbird_logical" -b 2048 -i 8192 /dev/hdc6
+
+(如果没有特殊需求的话，使用 "mkfs -t ext3 ...",不但容易记忆，而且非常好用)
+
+
+磁盘检验：fsck,badblocks
+fsck (file system check)
+fsck [-t 文件系统] [-ACay] 
+参数：
+-t: 指定文件系统,（linux会通过 super block 去分辨文件系统）
+-A: 依据 /etc/fstab 的内容，将需要的设备扫描一次。 
+-a: 自动修复检查到的有问题的扇区，所以不用一直按 y.  (重要)
+-y: 与 -a 类似， 但是某些文件系统仅支持 -y 这个参数。
+-C: 可以在检验的过程当中使用一个直方图来显示目前的进度。
+
+EXT2/EXT3 的额外参数功能（e2fsck 这个命令所提供)
+-f: 强制检查，一般来说，如果fsck 没有发现任何 unclean的标志，不会主动进入细化检查的，如果你想要强制 fsck 进入细化
+    检查，就得加上 -f 标志。
+-D: 针对文件系统下的目录进行优化配置。
+
+范例：
+强制将 /dev/hdc6 这个设备检验一下
+fsck -C -f -t ext3 /dev/hdc6
+查看系统有多少文件系统支持的fsck 软件
+
+注：我们的系统实际执行的 fsck 命令，其实是调用 e2fsck 这个软件。 可以用 mane2fsck 找到更多的参数辅助。
+
+
+检查硬盘或软盘扇区有没有坏轨
+badblcoks
+badlocks -[svw] 设备名称
+参数：
+-s: 在屏幕上列出进度；
+-v: 可以在屏幕上看到进度；
+-w: 使用写入的方式来测试，建议不要使用此参数，尤其是待检查的设备已有文件时！
+
+范例：
+badlocks -sv /dev/hdc6
+(注：由于这个命令其实可以通过 "mke2fs -c 设备文件名"在进行格式化的时候处理磁盘表面的读取测试，因此目前大多不使用这个命令)
+ 
+
+
+
+
+
+
+
+
+
+
+
 
 
 
