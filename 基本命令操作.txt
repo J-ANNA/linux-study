@@ -1,0 +1,67 @@
+基础命令操作
+
+
+显示日期与时间的命令:date;
+显示日历的命令：cal;  (calendar)
+简单好用的计算器：bc.
+
+1. 显示日期的命令：date
+date
+date +%Y/%m/%d
+date +%H:%M
+
+2. 显示日历的命令：cal
+cal
+cal [[month] year]  //cal 2018  或者 cal 1 2018
+
+3 简单计算器：bc
+退出：quit
+
+
+ctrl + c ： 中断目前程序
+ctrl +d：键盘输入结束；也可用来替代exit的输入
+
+改变用户组权限
+chgrp:改变文件所属用户组
+chown:改变文件所有者
+chmod:改变文件的权限
+
+chgrp:
+chgrp [-R] dirname/filename ...  //R:recursive(递归)
+范例：
+chgrp users install.log
+
+chown:
+chown [-R] 账号名称 文件或目录
+chown [-R] 账号名称:组名 文件或目录
+chown [-R] 账号名称.组名 文件或目录
+chown [-R] .组名 文件或目录            //单纯修改组
+
+
+chmod:
+数字类型改变文件权限
+chmod [-R] xyz 文件或目录    //xyz：数字类型的权限属性  r:4 w:2 x:1 累加
+符号类型改变文件权限
+chmod u(user)/g(grop)/o(other)/a(all) +(加入)/-(除去)/=(设置) 文件或目录
+//范例：
+chmod u=rwx,go=rx .bashrc
+chmod a+w .bashrc
+chmod a-x .bashrc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
