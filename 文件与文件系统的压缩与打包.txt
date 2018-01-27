@@ -1,0 +1,156 @@
+﻿常见的压缩文件扩展名：
+*.Z      compress 程序的压缩文件   //方法老旧，不常用
+*.gz     gzip 程序压缩的文件
+*.bz2    bzip2 程序压缩的文件
+*.tar    tar程序打包的数据，并没有压缩过
+*.tar.gz   tar程序打包的文件，其中经过gzip的压缩
+*.tar.bz2  tar程序打包的文件，其中经过bzip2的压缩
+
+
+compress
+compress [-rcv] 文件或目录     //压缩
+参数：
+-r: 可以连同目录下的文件也同时给予压缩；
+-c: 将压缩数据输出成为 standard output (输出到屏幕)；
+-v: 可以显示出压缩后的文件信息以及压缩过程中的一些文件变化。
+
+范例：
+cd /tmp
+cp /etc/man.config .
+compress -v man.config
+ls -l /etc/man.config /tmp/man*
+(在默认情况中，被compress压缩的源文件会不见，而压缩文件会被创建起来，而且扩展名是 *Z)
+
+范例：保留源文件
+compress -c man.config > man.config.back.Z
+
+uncompress 文件.Z        //解压
+范例：
+uncompress man.config.Z
+ll man*
+
+
+gzip,zcat      //重要：使用gzip压缩的文件在windows系统中，可以被WinRAR这个软件解压缩
+应用最广的压缩命令。目前gzip可以解开compress、zip与gzip等软件压缩的文件。gzip所新建的压缩文件为 *.gz 的文件名。
+gzip [-cdtv#] 文件名     //压缩与解压
+zcat 文件名.gz           //将压缩文件的内容读出来，而不是解压缩
+参数：
+-c: 将压缩的数据输出到屏幕上，可通过数据流重定向来处理；
+-d: 解压缩的参数；                                        //重要：解压
+-t: 可以用来检测一个压缩文件的一致性，看看文件有无错误；
+-v: 可以显示出原文件/压缩文件的压缩比等信息；
+-#: 压缩等级，-1最快，但是压缩比最差，-9最慢，但是压缩比最好默认是 -6。 //#代表数字：1-9
+
+范例：压缩
+cd /tmp
+cp /etc/man.config .
+gzip -v man.config
+ll /etc/man.config /tmp/man*
+
+范例：读取压缩文件内容
+zcat man.config.gz
+
+范例：解压缩
+gzip -d man.config.gz
+
+范例：将man.config 用最佳的压缩比压缩，并保留原来的文件
+gzip -9 -c man.config > man.config.gz
+
+
+bzip2,bzcat //比gzip好一点，用法大体相同
+bzip2 [-cdkzv#] 文件名
+bzcat 文件名.bz2
+参数：
+-c: 将压缩过程中产生的数据输出到屏幕上；
+-d: 解压缩的参数；   //也可以使用 bunzip2 这个命令来替代 bzip2 -d 
+-k: 保留原文件，而不会删除原始的文件；
+-z: 压缩的参数；
+-v: 可以显示原文件/压缩文件的压缩比等信息；
+-#: 与gzip同样的，都是在计算压缩比的参数， -9 最佳， -1 最快。
+
+范例：
+bzip2 -z man.config
+bzcat man.config.bz2
+bzip2 -d man.config.bz2
+bzip2 -9 -c man.config > man.config.bz2
+
+(此外，当你要解开一个压缩文件时，这个文件的名称为 .bz, .bz2, tbz, .tbz2等)
+
+
+打包命令：tar
+tar [-j|-z] [cv] [-f 新建的文件名] filename...    //打包与压缩
+tar [-j|-z] [tv] [-f 新建的文件名]                //查看文件名
+tar [-j|-z] [xv] [-f 新建的文件名] [-C 目录]      //解压缩
+参数：
+-c: 新建打包文件，可搭配 -v 来查看过程中被打包的文件名；
+-t: 查看打包文件的内容含有哪些文件名，重点在查看文件名；
+-x: 解打包或解压缩的功能，可以搭配 -C 在特定目录中解开。
+	(特别留意：-c, -t,-x 不可同时出现在一串命令行中)
+-j: 通过 bzip2 的支持进行压缩/解压缩，此时的文件名最好为 *.tar.bz2
+-z: 通过 gzip 的支持进行压缩/解压缩，此时的文件名最好为 *.tar.gz
+-v: 在压缩/解压缩的过程中，将正在处理的文件名显示出来
+-f filename: -f 后面要接被处理的文件名。建议 -f 单独写一个参数。
+-C 目录: 这个参数用在解压缩时，若要在特定目录解压缩，可以使用这个参数
+-p: 保留备份数据的原本权限与属性，常用于备份(-c)重要的配置文件
+-P: 保留绝对路径，即允许备份数据中含有根目录存在之意
+--exclude=FILE: 在压缩的过程中，不要将FILE打包
+
+
+最简单的使用tar的方式：
+压缩: tar -jcv -f filename.tar.bz2 要被压缩的文件或目录名称
+查询: tar -jtv -f filename.tar.bz2 
+解压缩: tar -jxv -f filename.tar.bz2 -C 欲解压的目录
+
+范例：
+tar -zpcv -f /root/etc.tar.gz /etc
+tar -jpcv -f /root/etc/tar.bz2 /etc
+tar -jtv -f /root/etc.tar.bz2
+tar -jxv -f /root/etc.tar.bz2 -C /tmp
+
+解开单一文件
+tar -jxv -f 打包文件.tar.bz2 待解开文件名      
+范例：
+tar -jxv -f test3.tar.bz2 test3/test2/1.txt
+tar -jxv -f test3.tar.bz2 -C test4 test3/test2/1.txt      //解压到test4文件夹  指定解压文件放在最后面
+
+打包某目录，但不含该目录下的某些文件
+tar -jcv -f /root/system.tar.bz2 --exclude=/root/etc* --exclude=/root/system.tar.bz2 /etc /root 
+
+(注意：多个文件夹打包后，解压时不是生成打包时的命名文件夹（system），而解压为打包之前的多个文件夹(etc  root))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
