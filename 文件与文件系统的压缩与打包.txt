@@ -118,8 +118,56 @@ tar -jcv -f /root/system.tar.bz2 --exclude=/root/etc* --exclude=/root/system.tar
 
 (注意：多个文件夹打包后，解压时不是生成打包时的命名文件夹（system），而解压为打包之前的多个文件夹(etc  root))
 
+仅备份比某个时刻还要新的文件
+find /etc -newer /etc/passwd 
+ll /etc/passwd
+tar -jcv -f /root/etc.newer.then.passwd.tar.bz2 --newer-mtime="2008/09/29" /etc/*     //备份
+tar -jtv -f /root/etc.newer.then.passwd.tar.bz2 |grep-v '/$'       //通过这个命令可以调出 tar.bz2 内的结尾非 / 的文件名
+			  
 
-备份 restore
+基本名称：tarfile, tarball
+tarfile: 仅是打包而已，"tar -cv -f file.tar "，这个文件我们称呼为 tarfile;
+tarball: 还有进行压缩的支持， "tar -jcv -f file.tar.bz2 ",我们称呼为tarball.
+
+
+
+特殊应用：利用管道命令与数据流
+通过标准输入输出的数据流重定向(standard input/standard output),以及管道命令(pipe)的方式，将待处理的文件一边打包一边解压缩到目标目录去。
+范例：将 /etc 整个目录一边打包一边在 /tmp 中解开
+cd /tmp
+tar -cvf - /etc | tar -xvf -  // - :管道命令，可以将 - 理解成是内存中的一个设备（缓冲区）。
+
+
+完整备份工具：dump
+dump [-Suvj] [-level] [-f 备份文件] 待备份数据
+dump -W
+参数：
+-S: 仅列出后面的待备份数据需要多少磁盘空间才能够备份完毕；
+-u: 将这次 dump 的时间记录到 /etc/dumpdateS 文件中；
+-v: 将dump的文件过程显示出来；
+-j: 加入bzip2的支持，将数据进行压缩，默认 bzip2 压缩等级为 2；
+-level: 备份等级 0-9
+-f: 有点类似tar,后面接产生的文件，可接例如 /dev/st0 设备文件名等；
+-W: 列出在 /etc/fstab 里面的具有 dump 设置的分区是否有备份过。
+
+范例：用dump备份完整的文件系统
+df -h
+dump -S/dev/hdc1
+dump -0u -f /root/boot.dump /boot    //完整备份
+ll /root/boot.dump /etc/dumpdates
+cat /etc/dumpdates
+dump -W
+
+dd -if=/dev/zero of=/boot/testing.img bs=1M count=10
+dump -1u -f /root/boot.dump.1 /boot   //新建差异备份文件
+dump -W
+
+范例：用dump备份非文件系统，即单一目录的方法
+将 /etc 整个目录通过 dump 进行备份，且含压缩功能
+dump -0j -f /root/etc.dump.bz2 /etc
+	
+
+还原备份 restore
 restore -t [-f dumpfile] [-h]    //用来查看 dump 文件
 restore -C [-f dumpfile] [-D 挂载点]    //比较dump与实际文件
 restore -i [-f dumpfile]            //进入互动模式
@@ -249,6 +297,45 @@ df -h /mnt
 umount /mnt
 
 
+
+dd:可以读取磁盘设备的内容（几乎是直接读取扇区），然后将整个设备备份成一个文件
+dd if="input file" of="output file" bs="block size" count="number"
+参数：
+if: 就是 input file, 也可以是设备
+of: 就是 output file,也可以是设备
+bs: 规划的一个block的大小，若未指定则默认是 512bytes（一个扇区的大小）
+count: 多少个 bs 的意思。
+
+范例：备份文件
+dd if=/etc/passwd of=/tmp/passwd.back
+范例：备份磁盘的第一个扇区
+dd if=/dev/hdc of=/tmp/mbr.back bs=512 count=1
+范例：备份一个分区
+dd if=/dev/hdc1 of=/tmp/boot.whole.disk
+
+
+cpio: 可以备份任何东西，包括设备文件
+      cpio不会主动去找文件来备份，得配合类似find等可以找到文件名的命令来告知cpio该被备份的数据在哪里
+cpio -ovcB >       //备份 
+cpio -ivcdu <       //还原 
+cpio -ivct <        //查看 
+备份会使用到的参数： 
+-o: 将数据 copy 输出到文件或设备上
+-B: 让默认的block可以增加至5120bytes,默认是512bytes
+    这样的好处是可以让大文件的存储速度加快（请参考 i-nodes 的观念）
+还原会使用到的参数：
+-i: 将数据自文件或设备复制到系统当中
+-d: 自动新建目录。使用 cpio 所备份的数据内容不见得会在同一层目录中，因此我们必须要让 cpio 在还原时可以新建新目录。此时就得要 -d 参数的帮助
+-u: 自动将较新的文件覆盖较旧的文件
+-t: 需配合 -i 参数，可以查看以cpio新建的文件或设备的内容
+一些可共享的参数：
+-v: 让存储的过程中文件名可以在屏幕上显示
+-c: 一种较新的 portable format 方式存储
+
+范例：配合 find 使用cpio备份
+find /boot | cpio -ovcB > /tmp/boot/cpio
+范例：还原 cpio文件到当前目录
+cpio -ivcd < /tmp/boot.cpio
 
 
 
