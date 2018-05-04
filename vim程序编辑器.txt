@@ -62,9 +62,58 @@ r,R:r只会替换光标所在的那一个字符一次；R会一直替换光标�
 :n1,n2 w [fileName]:将n1到n2行的内容保存为fileName文件
 :! command:暂时离开vi到命令行模式下执行command的显示结果。如：! ls -l
 
-(6)vim环境的更改
-:set nu: 显示行号
-:set nonu: 取消行号
+（6）区块选择
+v:字符选择，会将光标经过的地方反白选择。（注释是使用按键移动光标，而不是用鼠标拖动选择）
+V:行选择，会将光标经过的行反白选择。
+[Ctrl]+v: 区块选择
+y: 将选择的地方复制
+d: 将选择的地方删除
+
+（7）多文档编辑
+vim fileName1 fileName2   //vim同时打开fileName1文档和fileName2文档
+:n: 编辑下一个文档
+:N: 编辑上一个文档
+:files: 列出目前这个vim开启的所有文档
+
+（8）多窗口编辑
+:sp [fileName]:开启一个新的窗口，如果添加fileName表示在新窗口打开fileName文档，否则表示两个窗口为同一个文档内容（同步显示）
+[Ctrl]+w+↓: 光标移动到下一个窗口
+[Ctrl]+w+↑: 光标移动到上一个窗口
+[Ctrl]+w+q: 离开当前窗口
+
+（9）vim环境设定
+:set nu/nonu: 显示或隐藏行号
+:set hlsearch/mohlsearch: 高亮度搜索（反白）high light search
+:set autoindent/noautoindent: 自动缩排
+:set backup:自动存储备份档。更改file时，源文件会被另存为一个名为file~的备份文档。
+:set ruler: 是否显示设定值
+:set showmode: 是否显示状态信息
+:set backspace=(012): 2可删除任意字符；0/1只可删除刚刚输入的字符，而无法删除原本就存在的字符。
+:set all: 显示目前所有的环境参数设定值
+:set: 显示与系统默认值不同的设定参数，也就是自行改变过的参数值
+:syntax on/off: 是否依据程序相关语法显示不同颜色
+:set bg=dark/light: 显示不同的颜色色调，预设是light。
+
+
+（10）其它
+1）中文显示时乱码，修正语系编码
+LANG=zh_TW.big5 //或其它语系
+2）DOS与Linux格式转换
+dos2unix [-kn] file [newfile]
+unix2dos [-kn] file [newfile]
+选项与参数：
+-k: 保留该文档原本的mtime时间格式（不更新文档上次内容经过修订的时间）
+-n: 保留原本的旧档，将转换后的内容输出到新文档。
+3）语系编码转换
+iconv --list  //列出iconv 支持的语系数据
+iconv -f 原本编码 -t 新编码 fileName [-o newfile]
+选项与参数：
+-f: from，亦即来源之意，后接原本的编码格式；
+-t: to，亦即后来的新编码要是什么格式；
+-o file: 如果要保留原本的档案，那么使用 -o 新档名，可以建立新编码档案。
+例： iconv -f big5 -t uft8 vi.big5 -o v.uft8
+
+
 
 
 
