@@ -60,6 +60,32 @@ $: 使用变量前导符，即变量之前需要加的变量替代值
 { }：中间为命令块的组合
 
 
+数据流重定向
+1. 标准输入(stdin): 代码为0，使用< 或 <<;(<:替换；<<:累加)
+2. 标准输出(stdout): 代码为1，使用 > 或 >>;
+3. 标准错误输出(stderr): 代码为2，使用 2> 或 2>>
+
+范例：
+find /home -name .bashrc > list_right 2> list_error  //将stdout 与 stderr 分别存到不同的文件去
+
+/dev/null 垃圾桶黑洞设备与特殊写法
+范例：
+find /home -name .bashrc 2> /dev/null  //将错误的数据丢弃，屏幕上显示正确的数据
+
+//将命令的数据（正确+错误）全部写入同一文件
+find /home -name .bashrc > list 2> list  //错误
+find /home -name .bashrc > list 2> &1  //正确
+find /home -name .bashrc &> list   //正确
+
+范例：
+cat > catfile < ~/.bashrc
+cat > catfile << "eof"
+
+
+命令执行的判断依据： ;, &&, ||
+(1) cmd;cmd
+(2)$?(命令回传值) 与&& 或 ||
+若前一个命令执行的结果为正确，会回传一个$=0的值。
 
 
 
