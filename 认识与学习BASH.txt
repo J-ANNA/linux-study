@@ -88,6 +88,36 @@ cat > catfile << "eof"
 若前一个命令执行的结果为正确，会回传一个$=0的值。
 
 
+管线命令(pipe)
+例：ls -al /etc | less
+管线命令需要注意的地方：
+(1)管线命令仅会处理standard output,对于standard error output会予以忽略；
+(2)管线命令必须能够接受来自前一个指令的数据成为standard input继续处理才行。
+
+撷取命令：cut,grep
+cut:
+cut -d '分隔符' -f fields  //用于有特定分隔字符
+cut -c 字符区间   //用于排列整齐的讯息
+选项参数：
+-d: 后面接分隔字符。与 -f 一起使用;
+-f: 依据 -d 的分隔字符将一段讯息分割成数段，用 -f 取出第几段的意思；
+-c: 以字符(characters)的单位取出固定字符区间
+范例：
+echo $PATH | cut -d ';' -f 5   //第5段
+echo $PATH | cut -d ';' -f 3,5 //第3和5段
+export | cut -c 12-  //取得第12字符以后的所有字符
+export | cut -c 12-20  //取得第12-20的字符
+（cut 主要的用途在于将同一行里面的数据进行分解）
+
+grep:
+grep [-acinv] [--color=auto] '搜寻字符串' filename
+选项与参数：
+-a: 将binary文档以text文档的方式搜寻数据
+-c: 计算找到'搜寻字符串'的次数
+-i: 忽略大小写的不同，所以大小写视为相同
+-n: 顺便输出行号
+-v: 反向选择，亦即显示出没有'搜寻字符串'内容的那一行
+--color=auto: 可以将找到的关键词部分加上颜色的显示
 
 
 
