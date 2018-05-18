@@ -187,6 +187,13 @@ patch -R p0 < passwd.patch
 
 
 
+档案打印准备: pr
+在linux底下打印纯文本文档时，可以用 pr 加入标题、页码等。
+范例：
+pr /etc/man.config
+
+
+
 
 
 
