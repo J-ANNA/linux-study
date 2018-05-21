@@ -34,9 +34,78 @@ script 的执行方式差异 (source, sh script, ./script)
 例如：
 test -e /dmtsai && echo "exist" || echo "not exist"
 测试的标志     意义
+1. 关于某个档名的"文件类型"判断，如 test -e filename
 -e             该"文件名"是否存在(常用)
 -f             该"文件名"是否存在且为文档(file)
 -d             该"文件名"是否存在且为目录(directory)
+-b             该"文件名"是否存在且为一个 block device 装置
+-c             该"文件名"是否存在且为一个 character device 装置
+-S             该"文件名"是否存在且为一个Socket 文档
+-p             该"文件名"是否存在且为一个FIFO(pipe)文档
+-L             该"文件名"是否存在且为一个连结文档
+2. 关于文档的权限侦测，如 test -r filename
+-r             侦测该"文件名"是否存在且具有"可读"的权限
+-w             侦测该"文件名"是否存在且具有"可写"的权限
+-x             侦测该"文件名"是否存在且具有"可执行"的权限
+-u             侦测该"文件名"是否存在且具有"SUID"的权限
+-g             侦测该"文件名"是否存在且具有"SGID"的权限
+-k             侦测该"文件名"是否存在且具有"Sticky bit"的权限
+-s             侦测该"文件名"是否存在且为"非空白文档"
+3. 两个文档之间的比较，如：test file1 -nt file2
+-nt            (newer than)判断file1是否比file2新
+-ot            (older than)判断file1是否比file2旧
+-ef            判断file1与file2是否为同一文档，可用在判断hard link
+               的判定上。主要意义在判定两个文档是否均指向同一个inode
+4.关于两个整数之间的判定，如test n1 -eq n2
+-eq            两数值相等(equal)
+-ne            量数值不等(not equal)
+-gt            n1 大于 n2(greater than)
+-lt            n1 小于 n2(less than)
+-ge            n1 大于等于 n2(greater than or equal)
+-le            n1 小于等于 n2(less than or equal)
+5. 判定字符串的数据
+test -z string  判定字符串是否为0? 若string为空字符串，则为 true
+test -n string  判定字符串是否为非0? 若string为空字符串，则为false(-n可忽略)
+test str1 = str2  判定str1是否等于str2，若相等，则回传true
+test str1 != str2  判定str1是否不等于str2，若相等，则回传 false
+6. 多重条件判定，如 test -r filename -a -x filename 
+-a        (and)两状况同时成立
+-o        (or)两状况任何一个成立
+!         反向状态，如 test ! -x file, 当file 不具有 x 时，回传 true
+
+范例：
+#!/bin/bash
+#program:
+#user input a filename,program will check the flowing:
+#  1)exist?  2)file/firectory? 3)file permissions
+#history:
+2018/05/21  qinshijie  first release
+
+PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
+export PATH
+
+echo -e "Please input a filename,I will check the filename's type and permission.\n\n"
+read -p "Input a filename:" filename
+test -z $filename && echo "you must input a filename." && exit 0
+test ! -e $filename && echo "the filename $filename do not exist" && exit 0
+test -f $filename && filetype= "regulare file"
+test -d $filename && filetype= "directory"
+test -r $filename && perm="readable"
+test -w $filename && perm="$perm writable"
+test -x $filename && perm="$perm executable"
+
+echo "the filename: $filename is a $filetype"
+echo "And the permission are: $perm" 
+
+
+
+
+
+
+
+
+
+
 
 
 
