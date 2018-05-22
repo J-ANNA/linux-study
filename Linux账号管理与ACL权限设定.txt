@@ -1,0 +1,196 @@
+linux账号管理与ACL权限设定
+
+UID GID
+/etc/group
+/etc/passwd
+/etc/shadow
+
+effective group  / initial group
+
+//设定次要群组
+usermod -G users dmtsai
+//查看当前账号支持的群组
+groups
+//有效群组的切换
+newgrp users  //(新取得一个shell执行操作，输入exit回到原本的环境和shell)
+
+
+账号管理
+新建用户(useradd)
+useradd [-u UID] [-g 初始群组] [-G 次要群组] [-mM] [-c 说明栏] [-d 家目录绝对路径] [-s shell] 使用者账号名
+选项与参数：
+-u: 后面接的是UID,十一组数字。直接指定一个特定的UID给这个账号;
+-g：后面接的那个组名就是 initial group
+-G: 后面接的组名则是这个账号还可以加入的群组。这个选项与参数会修改 /etc/group 内的相关资料
+-M: 强制！不要建立用户 /home 目录 (系统账号默认值)
+-m: 强制！要建立用户 /home 目录 (一般账号默认值)
+-c: /etc/passwd 的第五栏的说明内容。可以谁便设定
+-d: 指定某个目录成为 /home 目录，而不要使用默认值。务必使用绝对路径
+-r: 建立一个系统账号，这个账号的UID会有限制(参考 /etc/login.defs)
+-s: 后面接一个shell,若没有指定则是预设是 /bin/bash
+-e: 后面接一个日期，格式为"YYYY-MM-DD"此项目可写入shadow第八字段，亦即账号失效的设定项目
+-f: 后面接 shadow 的第七字段项目，指定密码是否会失效。0为立刻失效，-1为永远不失效(密码只会过期而强制于登入时重新设定而已)
+
+范例：
+//完全参考默认值建立一个用户
+useradd vbird1
+ll -d /home/vbird1
+//users为初始群组，以及uid为700来建立一个名为vbird的账号
+useradd -u 700 -g users vbird2
+//建立一个系统账号，名为vbird3
+useradd -r vbird3
+
+用户账号与密码参数方面的文档：/etc/passwd, /etc/shadow
+使用者群组相关方面的文档：/etc/group, /etc/gshadow
+用户的 /home 目录：/home/账号名称
+
+使用 useradd 这支程序在建立 Linux 上癿账号时，至少会参考：
+/etc/default/useradd
+/etc/login.defs
+/etc/skel/*
+
+
+passwd
+passwd [--sdtin]  //所有人均可使用来改自己的密码
+passwd [-l] [-u] [--stdin] [-S] [-n 日数] [-x 日数] [-w 日数] [-i 日期] 账号 //root 功能
+选项与参数：
+--stdin: 可以透过来自前一个管线的数据，作为密码输入，对shell script 有帮助
+-l: lock, 会在 /etc/shadow 第二栏最前面加上"!"，使密码失效
+-u: 与 -l 相反，unlock
+-S: 列出密码相关参数，亦即 shadow 档案内的大部分信息
+-n: 后面接天数，shadow的第4字段，多久不可修改密码天数
+-x: 后面接天数，shadow的第5字段，多久内必须要更动密码
+-w: 后面接天数，shadow的第6字段，密码过期前的警告天数
+-i: 后面接"日期"，shadow的第7字段，密码失效日期
+
+
+passwd vbird2  //设定指定账户密码
+passwd         //设置当前账号密码
+echo "abc543CC" | passwd --stdin vbird1
+passwd -S vbird1
+passwd -x 60 -i 10 vbird2
+passwd -l vbird1
+passwd -u vbird1 
+
+
+chage: 详细的密码参数显示功能
+chage [-ldEImMW] 账号名
+选项与参数：
+-l: 列出该账号的详细密码参数
+-d: 后面接日期，修改shadow第三字段(最近一次更改密码的日期)，格式YYYY-MM-DD
+-E ：后面接日期，修改 shadow 第八字段(账号失效日)，格式 YYYY-MM-DD
+-I ：后面接天数，修改 shadow 第七字段(密码失效日期)
+-m ：后面接天数，修改 shadow 第四字段(密码最短保留天数)
+-M ：后面接天数，修改 shadow 第五字段(密码多久需要进行变更)
+-W ：后面接天数，修改 shadow 第六字段(密码过期前警告日期)
+
+
+usermod: 进行账号相关数据的微调
+usermod [-cdegGlsuLU] username
+选项与参数：
+-c：后面接账号的说明，即 /etc/passwd 第五栏的说明栏，可以加入一些账号癿说明。
+-d ：后面接账号home目录，即修改 /etc/passwd 的第六栏；
+-e ：后面接日期，格式是 YYYY-MM-DD 也就是在 /etc/shadow 内的第八个字段数据
+-f ：后面接天数，为 shadow 的第七字段。
+-g ：后面接初始群组，修改 /etc/passwd 的第四个字段，亦即是 GID 的字段
+-G ：后面接次要群组，修改这个使用者能够支持的群组，修改的是 /etc/group
+-a ：与 -G 合用，可"增加次要群组的支持",而非"设定"
+-l ：后面接账号名称。亦即是修改账号名称， 即/etc/passwd 第一栏
+-s ：后面接 Shell 癿实际文档，例如 /bin/bash 或 /bin/csh 等等。
+-u ：后面接 UID 数字，即 /etc/passwd 第三栏的资料；
+-L ：暂时将用户的密码冻结，让他无法登入。其实仅改 /etc/shadow 的密码栏。
+-U ：将 /etc/shadow 密码栏的 "!"拿掉，密码解冻
+
+范例：
+usermod -c "VBird's test" vbird2
+usermod -e "2009-12-31" vbird2
+
+给 vbird3 建立他的 home 目录
+ll -d ~vbird3
+ls:/home/vbird3:No such file or directory
+cp -a /etc/skel /home/vbird3
+chown -R vbird3:vbird3 /home/vbird3
+chmod 700 /home/vbird3
+ll -a ~vbird3
+
+userdel: 删除用户的相关数据
+userdel [-r] username
+选项与参数：
+-r: 连同用户的家目录也一起删除
+
+用户的数据有：
+用户账号/密码相关参数：/etc/passwd, /etc/shadow
+使用者群组相关参数：/etc/group, /etc/gshadow
+用户个人档案数据： /home/username, /var/spool/mail/username..
+
+
+一般身份用户常用的账号数据变更与查询指令
+finger: 查阅用户相关信息
+finger [-s] username 
+选项与参数：
+-s: 仅列出用户的账号、全名、终端机代号与登入时间等等
+-m: 列出与后面接的账号相同者，而不是利用部分比对(包括全名部分)
+
+范例：
+finger vbird1 
+范例2：
+利用 vbird1 建立自己的计划档
+echo "I will study Linux during this year." > ~/.plan
+finger vbird1
+范例3：找出目前在系统上面登入的用户和登陆时间
+finger
+
+
+chfn: 即 change finger, 修改用户的finger 数据
+chfn [-foph] [账号名]
+选项与参数：
+-f: 后面接完整的大名
+-o: 办公室的房间号码
+-p: 办公室的电话号码
+-h: 家里的电话号码
+
+
+chsh: 即change shell, 修改 shell
+chsh [-ls]
+选项与参数：
+-l: 列出目前系统上可用的shell, 其实就是 /etc/shells 的内容
+-s: 设定修改自己的 shell
+
+范例：
+chsh -l 
+chsh -s /bin/csh
+
+
+id: 查询UID/GID信息
+id [username]
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
