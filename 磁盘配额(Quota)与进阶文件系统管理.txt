@@ -1,0 +1,329 @@
+磁盘配额(Quota)与进阶文件系统管理
+
+Quota针对整个filesystem的限制项目主要分为以下几个部分：
+1. 容量限制或文档数量限制(block 或 inode)
+2. 柔性劝导与硬件规定(soft / hard)
+3. 会倒数计时的宽限时间(grace time)
+
+
+范例：Quota 的设定流程
+
+制作账号环境
+[root@www ~]# vi addaccount.sh
+#!/bin/bash
+#使用script来建立实验 quota 所需的环境
+groupadd myquotagrp
+for username in myquota1 myquota2 myquota3 myquota4 myquota5
+do
+	useradd -g myquotagrp $username
+	echo "password" | passwd --stdin $username
+done
+
+[root@www ~]#sh addaccount.sh
+
+流程一：文件系统支援
+1.查看 /home 是否是个独立的 filesystem
+[root@www ~]# df -h /home
+Filesystem Size Used Avail Use% Mounted on
+/dev/hda3 4.8G 740M 3.8G 17% /home <==该主机的 /home 确实是独立的
+[root@www ~]# mount | grep home
+/dev/hda3 on /home type ext3 (rw)
+
+2.手动加入quota的支持
+[root@www ~]#mount -o remount,usrquota,grpquota /home
+[root@www ~]#mount | grep home
+/dev/hda3 on /home type ext3 (rw,usrquota,grpquota)
+# 重点就在于 usrquota, grpquota ！注意写法！
+
+3.不过手动挂载的数据在下次重新挂载就会消失，因此最好写入配置文件当中
+[root@www ~]# vi /etc/fstab
+LABEL=/home /home ext3 defaults,usrquota,grpquota 1 2
+# 其他顷目并没有列出来。重点在于第四字段。于 default 后面加上两个参数
+
+[root@www ~]# umount /home
+[root@www ~]# mount -a
+[root@www ~]# mount | grep home
+/dev/hda3 on /home type ext3 (rw,usrquota,grpquota)
+
+(修改完 /etc/fstab 后，务必要测试一下。若有发生错误得要赶紧处理。因为这个文档如果修改错误，会造成无法开机完全的情况)
+
+流程二：建立quota记录文件
+quotacheck: 扫描文件系统并建立 Quota 的记录文件
+quotacheck [-avugfM] [/mount_point]
+选项与参数：
+-a: 扫描所有在 /etc/mtab内，含有quota支持的filesystem,加上次参数后，/mount_point可不必写，因为扫描所有的filesystem
+-u: 针对用户扫描文档与目录的使用情况，建立 aquota.user
+-g: 针对群组扫描文档与目录的使用情况，建立 aquota.group
+-v: 显示扫描过程的信息
+-f: 强制扫描文件系统，并写入新的 quota 配置文件(危险)
+-M: 强制以读写的方式扫描文件系统，只有在特殊情况下才会使用
+
+# 针对整个系统含有 usrquota, grpquota 参数的文件系统进行 quotacheck 扫描
+[root@www ~]# quotacheck -avug
+quotacheck: Scanning /dev/hda3 [/home] quotacheck: Cannot stat old user quota
+file: No such file or directory <==有找到文件系统，但尚未制作记录文件！
+quotacheck: Cannot stat old group quota file: No such file or directory
+quotacheck: Cannot stat old user quota file: No such file or directory
+quotacheck: Cannot stat old group quota file: No such file or directory done <==上面三个错误只是说明记录文件尚未建立而已，可以忽略不理！
+quotacheck: Checked 130 directories and 107 files <==实际搜寻结果
+quotacheck: Old file not found.
+quotacheck: Old file not found.
+# 若执行这个指令却出现如下的错误讯息，表示你没有任何文件系统有启动 quota 支持！
+# quotacheck: Can't find filesystem to check or filesystem not mounted with quota option.
+
+[root@www ~]# ll -d /home/a*
+-rw------- 1 root root 8192 Mar 6 11:58 /home/aquota.group
+-rw------- 1 root root 9216 Mar 6 11:58 /home/aquota.user
+# 在该案例中，/home 是独立的文件系统，因此搜寻结果会将两个记录文件放
+在 /home 底下。这两个文档就是 Quota 最重要的信息了！
+
+# 如果因为特殊需求需要强制扫描已挂载的文件系统时
+[root@www ~]# quotacheck -avug -mf
+quotacheck: Scanning /dev/hda3 [/home] done
+quotacheck: Checked 130 directories and 109 files
+# 资料要简洁很多。因为有记录文件存在嘛。所以警告讯息不会出现
+
+注意：
+1. 不用手动编辑记录文件，因为那两个文件时quota自动数据文件，并不是纯文本文档，且该文档会一直变动。
+2. 要建立 aquota.user, aquota.group,使用 quotacheck 指令，不是手动编辑。
+
+
+流程三：Quota启动、关闭与限制值设定
+quotaon: 启动 quota 的服务
+quotaon [-avug]
+quotaon [-vug] [/mount_point]
+选项与参数：
+-u: 针对使用者启动 quota (aquota.user)
+-g: 针对群组启动 quota (aquota.group)
+-v: 显示启动过程的相关讯息
+-a: 根据 /etc/mtab 内的 filesystem 设定启动有关的 quota, 若不加 -a 的话，则后面就需要加上特定的那个 filesystem 
+
+# 由于我们要启动 user/group 的 quota ，所以使用底下的语法即可
+[root@www ~]# quotaon -auvg
+/dev/hda3 [/home]: group quotas turned on
+/dev/hda3 [/home]: user quotas turned on
+
+# 特殊用法，假如你的启动 /var 的 quota 支持，那么仅启动 user quota 时
+[root@www ~]# quotaon -uv /var
+
+(这个 "quotaon -auvg" 的指令几乎只在第一次启动 quota 时才需要进行。因为下次等你重新启动系统时，系统的 /etc/rc.d/rc.sysinit 这个初始化脚本就会自动的下达这个指令了)
+
+quotaoff: 关闭 quota 的服务
+quotaoff [-a]
+quotaoff [-ug] [/mount_point]
+选项与参数：
+-a: 全部的filesystem的quota都关闭 (根据 /etc/mtab)
+-u: 仅针对后面接的那个 /mount_point 关闭 user quota
+-g: 仅针对后面接的那个 /mount_point 关闭 group quota
+
+edquota: 编辑账号/群组的限值与宽限时间
+edquota [-u username] [-g groupname]
+edquota -t 修改宽限时间
+edquota -p 范本账号 -u 新账号
+选项与参数：
+-u: 后面接账号名称。可以进入 quota 的编辑画面(vi)去设定 username 的限制值
+-g: 后面接组名称。可以进入 quota 的编辑画面(vi)去设定 groupname 的限制值
+-t: 可以修改宽限时间
+-p: 复制范本。那个模板账号为已经存在并且已设定好 quota 的使用者，意义为 "将范本账号这个人的 quota 限制值复制给新账户"
+
+设定 myquota1 这个使用者的 quota 限制值
+[root@www ~]# edquota -u myquota1
+Disk quotas for user myquota1 (uid 710):
+Filesystem blocks soft hard inodes soft hard
+/dev/hda3     80    0   0     10     0    0
+设置
+Disk quotas for user myquota1 (uid 710):
+Filesystem blocks   soft   hard   inodes soft hard
+/dev/hda3   80     250000 300000    10    0     0
+
+# 将 myquota1 的限制值复制给其他四个账号
+[root@www ~]# edquota -p myquota1 -u myquota2
+[root@www ~]# edquota -p myquota1 -u myquota3
+[root@www ~]# edquota -p myquota1 -u myquota4
+[root@www ~]# edquota -p myquota1 -u myquota5
+
+更改群组的quota限额
+[root@www ~]# edquota -g myquotagrp
+Disk quotas for group myquotagrp (gid 713):
+Filesystem blocks   soft    hard  inodes soft hard
+/dev/hda3    400   900000 1000000   50     0   0
+# 记得，单位为 KB 
+
+设置宽限时间
+# 宽限时间原本为 7 天，将他改成 14 天吧！
+[root@www ~]# edquota -t
+Grace period before enforcing soft limits for users:
+Time units may be: days, hours, minutes, or seconds
+Filesystem    Block grace period      Inode grace period
+/dev/hda3           14days                  7days
+# 原本是 7days ，我们将他给改为 14days
+
+
+流程四：Quota 限制值的报表
+quota: 单一用户的 quota 报表
+quota [-uvs] [username]
+quota [-gvs] [groupname]
+选项与参数：
+-u: 后面可以接 username,表示显示出该用户的quota限制值。若不接 username,表示显示出执行者的 quota 限制值 
+-g: 后面接 groupname, 表示显示出该群组的 quota 限制值
+-v: 显示每个用户在 filesystem 的 quota 值
+-s: 使用1024为倍数来指定单位，会显示如 M 之类的单位
+
+# 直接使用 quota 去显示出 myquota1 与 myquota2 的限额
+[root@www ~]# quota -uvs myquota1 myquota2
+Disk quotas for user myquota1 (uid 710):
+Filesystem blocks quota limit grace files quota limit grace
+/dev/hda3    80    245M  293M         10    0     0
+Disk quotas for user myquota2 (uid 711):
+Filesystem blocks quota limit grace files quota limit grace
+/dev/hda3     80   245M 293M          10    0     0
+# 这个指令显示出来的数据跟 edquota 几乎是一模一样的。只是多了个 grace项目。
+# 你会发现 grace 底下没有任何数据，这是因为我们的使用量 (80) 尚未超过soft
+
+# 显示出 myquotagrp 的群组限额
+[root@www ~]# quota -gvs myquotagrp
+Disk quotas for group myquotagrp (gid 713):
+Filesystem blocks quota limit grace files quota limit grace
+/dev/hda3    400  879M  977M         50     0     0
+
+repquota: 针对文件系统的限额做报表
+repquota -a [-vugs]
+选项与参数：
+-a: 直接到 /etc/mtab 搜寻具有 quota 标志的 filesystem,并报告 quota 的结果
+-v: 输出的数据将含有 filesystem 相关的细部信息
+-u: 显示出用户的 quota 限值(这是默认值)
+-g: 显示出个别群组的 quota 限值
+-s: 使用M,G为单位显示结果
+
+# 查询本案例中所有使用者的 quota 限制情况：
+[root@www ~]# repquota -auvs
+*** Report for user quotas on device /dev/hda3 <==针对 /dev/hda3
+Block grace time: 14days; Inode grace time: 7days <==block 宽限时间为14 天
+		   Block limits 			   File limits
+User      used  soft  hard grace   used soft hard grace
+----------------------------------------------------------------------
+root --   651M   0     0             5   0    0
+myquota1 -- 80  245M  293M           10  0    0
+myquota2 -- 80  245M  293M           10  0    0
+myquota3 -- 80  245M  293M           10  0    0
+myquota4 -- 80  245M  293M           10  0    0
+myquota5 -- 80  245M  293M           10  0    0
+Statistics: <==这是所谓的系统相关信息，用 -v 才会显示
+Total blocks: 9
+Data blocks: 2
+Entries: 22
+Used average: 11.000000
+
+
+流程5：测试与管理
+# 测试1：利用 myquota1 的身份，建置一个 270MB 的大档案，幵观察 quota结果
+[myquota1@www ~]# dd if=/dev/zero of=bigfile bs=1M count=270
+hda3: warning, user block quota exceeded.
+270+0 records in
+270+0 records out
+283115520 bytes (283 MB) copied, 3.20282 seconds, 88.4 MB/s
+
+(注意：使用 myquota1 的账号去进行 dd 指令)
+
+
+warnquota: 对超过限额者发出警告信(email)
+[root@www ~]# warnquota
+执行 warnquota 可能也不会产生任何讯息以及信件，因为只有当使用者的 quota 有超过 soft 时，warnquota 才会发送警告信。警告信的内容编辑在 /etc/warnquota.conf 中。
+[root@www ~]# vi /etc/warnquota.conf
+# 先找到底下这几行的设定值：
+SUBJECT = NOTE: You are exceeding your allocated disk space limits <==第 10 行
+CC_TO = "root@localhost" <==第 11 行
+MESSAGE = Your disk usage has exceeded the agreed limits on this server|Please delete any unnecessary files on following filesystems:|   <== 第 21 行
+SIGNATURE = root@localhost <==第 25 行
+
+让系统自动执行warnquota
+[root@www ~]# vi /etc/cron.daily/warnquota
+/usr/sbin/warnquota
+# 只要这一行，且将执行文件以绝对路径的方式写入即可
+
+
+setquota: 直接于指令中设定 quota 限额
+setquota [-u|-g] 名称 block(soft) block(hard) inode(soft) inode(hard) 文件系统 
+范例： 
+[root@www ~]# setquota -u myquota5 100000 200000 0 0 /home
+
+
+不更动既有系统的quota实例：使用 ln 实现
+1. 将 /var/spool/mail 这个目录完整的移动到 /home 底下；
+2. 利用 ln -s /home/mail /var/spool/mail 建立链接数据；
+3. 将 /home 进行 quota 限额设定
+
+
+软件磁盘阵列(Software RAID)
+
+RAID(Redundant Arrays of Inexpensive Disks,磁盘阵列)：
+RAID 可以透过一个技术(软件或硬件)，将多个较小的磁盘整合成为一个较大的磁盘装置；而这个较大的磁盘功能可不止是储存而已，他还具有数据保护的功能。整个 RAID 由亍选择的等级(level)不同，而使得整合后的磁盘具有不同的功能。
+常见的level类型：
+1. RAID-0(等量模式,stripe): 效能最佳
+2. RAID-1(映像模式,mirror): 完整备份
+3. RAID 0+1, RAID 1+0
+4. RAID 5：效能与数据备份的均衡考虑
+5. Spare Disk: 预备磁盘的功能
+
+磁盘阵列的优点：
+1. 数据的安全与可靠性
+2. 读写效能
+3. 容量
+
+
+软件磁盘阵列的设定
+mdadm --detail /dev/md0
+mdadm --create --auto=yes /dev/md[0-9] --raid-devices=N --level=[015] --spare-devices=N /dev/sdx /dev/hdx...
+选项与参数：
+--create: 为建立 RAID 的选项
+--auto=yes: 决定建立后面接的软件磁盘阵列装置，亦即 /dev/md0,/dev/md1...
+--raid-devices=N: 使用几个磁盘(parition)作为磁盘阵列的装置
+--spare-devices=N: 使用几个磁盘作为备用(spare)装置
+--level=[015]: 设定这组磁盘阵列的等级。支持很多，不过建议只要用0,1,5即可
+--detail: 后面所接的那个磁盘阵列装置的详细信息
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
