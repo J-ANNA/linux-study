@@ -282,29 +282,352 @@ mdadm --create --auto=yes /dev/md[0-9] --raid-devices=N --level=[015] --spare-de
 --level=[015]: 设定这组磁盘阵列的等级。支持很多，不过建议只要用0,1,5即可
 --detail: 后面所接的那个磁盘阵列装置的详细信息
 
+查看软件磁盘阵列情况：
+[root@www ~]# cat /proc/mdstat
+
+格式化与挂载使用RAID
+[root@www ~]# mkfs -t ext3 /dev/md0  #/dev/md0 作为装置被格式化
+[root@www ~]# mkdir /mnt/raid
+[root@www ~]# mount /dev/md0 /mnt/raid
+[root@www ~]# df 
+
+仿真RAID错误的救援模式
+[root@www ~]# mdadm --manage /dev/md[0-9] [-add 装置] [--remove 装置] [--fail 装置]
+选项与参数：
+--add: 会将后面的装置加入到这个 md 中
+--remove: 会将后面的装置由这个 md 中移除
+--fail: 会将后面的装置设定成为出错的状态
+
+# 1.假设 /dev/hda8 这个装置出错了。实际模拟的方式：
+[root@www ~]# mdadm --manage /dev/md0 --fail /dev/hda8
+mdadm: set /dev/hda8 faulty in /dev/md0
+[root@www ~]# mdadm --detail /dev/md0
+
+将出错的磁盘移除并加入新磁盘
+# 建立新的分割槽
+[root@www ~]# fdisk /dev/hda
+Command (m for help): n
+First cylinder (2668-5005, default 2668): <==这里按 [enter]
+Using default value 2668
+Last cylinder or +size or +sizeM or +sizeK (2668-5005, default 5005):
++1000M
+Command (m for help): w
+[root@www ~]# partprobe
+# 此时系统会多一个 /dev/hda11 的分割槽
+
+# 加入新的拔除有问题的磁盘
+[root@www ~]# mdadm --manage /dev/md0 --add /dev/hda11 --remove
+/dev/hda8
+mdadm --detail /dev/md0
 
 
+开启自动启动 RAID 并自动挂载
+[root@www ~]# mdadm --detail /dev/md0 | grep -i uuid
+UUID : 7c60c049:57d60814:bd9a77f1:57e49c5b
+# 后面那一串数据，就是这个装置向系统注册的 UUID 标识符
+
+# 开始设定 mdadm.conf
+[root@www ~]# vi /etc/mdadm.conf
+ARRAY /dev/md0 UUID=7c60c049:57d60814:bd9a77f1:57e49c5b
+#     RAID装置    标识符内容
+# 开始设定开机自动挂载并测试
+[root@www ~]# vi /etc/fstab
+/dev/md0 /mnt/raid ext3 defaults 1 2
+[root@www ~]# umount /dev/md0; mount -a
+[root@www ~]# df /mnt/raid
+Filesystem 1K-blocks Used Available Use% Mounted on
+/dev/md0 2916920 188464 2580280 7% /mnt/raid
+# 你得确定可以顺利挂载，并且没有发生任何错误
+(如果到这里都没有出现任何问题，接下就 reboot 你的系统并等待看看能否顺利的启动)
+
+关闭软件RAID
+# 1. 先卸除且删除配置文件内与这个 /dev/md0 有关的设定：
+[root@www ~]# umount /dev/md0
+[root@www ~]# vi /etc/fstab
+#/dev/md0 /mnt/raid ext3 defaults 1 2
+# 将这一行删除掉，或者是批注掉也可以
+
+# 2. 直接关闭 /dev/md0 的方法
+[root@www ~]# mdadm --stop /dev/md0
+mdadm: stopped /dev/md0 <==这样就关闭了
+[root@www ~]# cat /proc/mdstat
+Personalities : [raid6] [raid5] [raid4]
+unused devices: <none> <==确实不存在任何数组装置
+[root@www ~]# vi /etc/mdadm.conf
+#ARRAY /dev/md0 UUID=7c60c049:57d60814:bd9a77f1:57e49c5b
+# 一样，初除他或是批注他
 
 
+逻辑滚动条(Logical Volume Manager)
+可以弹性的调整 filesystem 的容量。LVM可以整合多个实体partition在一起，让这些partitions看起来就像是一个磁盘一样。而且，还可以在将来新增或移除其它的实体partition 到这个 LVM 管理的磁盘当中。
+
+PV(Physical Volume,实体滚动条)
+VG(Volume Group,滚动条群组)
+PE(physical Extend,实体延伸区块)，是LVM的最小储存区块
+LV(Logical Volume,逻辑滚动条)
+
+LV的装置文件名通常指定为 "/dev/vgname/lvname"
+LV：写入硬盘的两种方式
+1. 线性模式(linear)
+2. 交错模式(triped)
+
+LVM实作流程
+(LVM必需要核心有支持且需要安装lvm2这个软件。)
+1. 先分割出4个partition,每个partition的容量均为1.5G左右，且system ID 需要为 8e;
+2. 全部的partition整合成为一个VG,VG的名称设定为vbirdvg;且PE的大小为16MB;
+3. 全部的VG容量都丢给LV,LV的名称设定为vbirdlv;
+4. 最终这个LV格式化为ext3的文件系统，且挂载在 /mnt/lvm 中
+
+1. #分割出4个partition,system ID为8e
+[root@www ~]# fdisk /dev/hda   
+...
+[root@www ~]# partprobe 
+[root@www ~]# fdisk -l
+
+2. PV阶段
+pvcreate: 将实体 partition 建立成为 PV;
+pvscan: 搜索目前系统里面任何具有PV的磁盘;
+pvdisplay: 显示出目前系统上面的PV状态;
+pvremove: 将PV属性移除，让该 partition 不具有 PV 属性.
+
+# 检查有无 PV 在系统上，然后将 /dev/hda6~/dev/hda9 建立成为 PV 格式
+[root@www ~]# pvscan
+No matching physical volumes found <==找不到任何的 PV 存在
+
+#建立这四个 partition 成为 PV 
+[root@www ~]# pvcreate /dev/hda{6,7,8,9}
+
+[root@www ~]# pvscan
+[root@www ~]# pvdisplay
 
 
+3.VG阶段
+VG相关的指令：
+vgcreate: 建立VG
+vgscan: 搜寻系统上面是否有VG存在
+vgdisplay: 显示目前系统上面的VG状态
+vgextend: 在VG内增加额外的PV
+vgreduce: 在VG内移除PV
+vgchange: 设定VG是否启动(active)
+vgremove: 删除一个VG
+
+vgcreate [-s N[mgt]] VG名称 PV名称
+选项与参数：
+-s: 后面接PE的大小(size),单位可以是m,g,t(大小写均可)
+
+# 将 /dev/hda6-8 建立成为一个 VG，且指定 PE 为 16MB 
+[root@www ~]# vgcreate -s 16M vbirdvg /dev/hda{6,7,8}
+Volume group "vbirdvg" successfully created
+
+[root@www ~]# vgscan
+...
+[root@www ~]# pvscan
+...
+[root@www ~]# vgdisplay
+...
+
+# 将剩余的 PV (/dev/hda9) 丢给 vbirdvg 
+[root@www ~]# vgextend vbirdvg /dev/hda9
 
 
+LV阶段
+LV相关指令
+lvcreate: 建立LV
+lvscan: 查询系统上面的LV
+lvdisplay: 显示系统上面的LV状态
+lvextend: 在LV里面增加容量
+lvreduce: 在LV里面减少容量
+lvremove: 删除一个LV
+lvresize: 对LV进行容量大小的调整
+
+lvcreate [-L N[mgt]] [-n LV名称] VG名称
+lvcreate [-l N] [-n LV名称] VG名称
+选项与参数：
+-L: 后面接容量，容量的单位可以是 M,G,T 等，要注意的是，最小单位为 PE，因此这个容量必项要是 PE 的倍数，若不相符，系统会自行计算最相近的容量。
+-l：后面可以接 PE 的"个数"，而不是"容量"。若要这么做，得要自行计算 PE数。
+-n ：后面接的就是 LV 的名称
+更多的说明应该可以自行查阅 man lvcreate
+# 将整个 vbirdvg 通通分配给 vbirdlv ，要注意，PE 共有 356 个。
+[root@www ~]# lvcreate -l 356 -n vbirdlv vbirdvg
+Logical volume "vbirdlv" created
+...
+[root@www ~]# ll /dev/vbirdvg/vbirdlv
+lrwxrwxrwx 1 root root 27 Mar 11 16:49 /dev/vbirdvg/vbirdlv ->
+/dev/mapper/vbirdvg-vbirdlv
+
+[root@www ~]# lvdisplay
+...
+
+(注意：VG的名称为可直接使用，如vbirdvg; 但LV的名称必须使用全名，亦即是 /dev/vbirdvg/vbirdlv)
 
 
+文件系统阶段
+# 格式化、挂载与观察 LV 
+[root@www ~]# mkfs -t ext3 /dev/vbirdvg/vbirdlv <==注意 LV 全名
+[root@www ~]# mkdir /mnt/lvm
+[root@www ~]# mount /dev/vbirdvg/vbirdlv /mnt/lvm
+[root@www ~]# df
+...
+
+(其实 LV 的名称建置成为 /dev/vbirdvg/vbirdlv 是为了让使用者直觉式的找到我们所需要的数据， 实际上 LVM 使用的装置是放置到 /dev/mapper/ 目录下的，/dev/mapper/vbirdvg-vbirdlv)
 
 
+放大LV容量
+1. 用fdisk设定新的具有8e system ID 的 partition
+2. 利用pvcreate建置PV
+3. 利用vgextend将PV加入vbirdvg
+4. 利用lvresize将新加入的PV内PE加入vbirdlv中
+5. 透过resize2fs将文件系统的容量确实增加 (重要！！！针对文件系统处理)
+
+# 1. 处理出一个新的 partition
+[root@www ~]# fdisk /dev/hda 
+...
+[root@www ~]# partprobe
+[root@www ~]# fdisk -l
+...
+
+# 2. 建立新的 PV：
+[root@www ~]# pvcreate /dev/hda10
+Physical volume "/dev/hda10" successfully created
+[root@www ~]# pvscan
+...
+
+# 3. 加大 VG ，利用 vgextend 功能
+[root@www ~]# vgextend vbirdvg /dev/hda10
+...
+
+# 4. 放大 LV 吧！利用 lvresize 的功能杢增加！
+[root@www ~]# lvresize -l +179 /dev/vbirdvg/vbirdlv
+
+[root@www ~]# lvdisplay
+...
+[root@www ~]# df /mnt/lvm
+...
+
+# 5.1 先看一下原本的文件系统内的 superblock 记录情况
+[root@www ~]# dumpe2fs /dev/vbirdvg/vbirdlv
+
+# 5.2 resize2fs 的语法
+[root@www ~]# resize2fs [-f] [device] [size]
+选项与参数：
+-f ：强制进行 resize 的动作
+[device]：装置的文件名；
+[size] ：可以加也可以不加。如果加上 size 的话，那么就必须要给予一个单位，譬如 M, G 等等。如果没有 size 的话，那么预设使用 "整个 partition"的容量来处理
+
+# 5.3 完整的将 LV 的容量扩充到整个 filesystem 
+[root@www ~]# resize2fs /dev/vbirdvg/vbirdlv
+...
+[root@www ~]# df /mnt/lvm
+...
 
 
+缩小LV容量
+# 1. 先找出 /dev/hda6 的容量大小，并尝试计算文件系统需缩小到多少
+[root@www ~]# pvdisplay
+--- Physical volume ---
+PV Name /dev/hda6
+VG Name vbirdvg
+PV Size 1.40 GB / not usable 11.46 MB
+Allocatable yes (but full)
+PE Size (KByte) 16384
+Total PE 89
+Free PE 0
+Allocated PE 89
+PV UUID Z13Jk5-RCls-UJ8B-HzDa-Gesn-atku-rf2biN
+# 从这里可以看出 /dev/hda6 有多大，而且含有 89 个 PE 的量
+# 那如果要使用 resize2fs 时，则怪量减去 1.40GB 就对了
+
+# 2. 降低文件系统的容量
+(注意：放大可以在线直接进行，缩小文件系统无法支持)
+[root@www ~]# umount /mnt/lvm   #需要先卸载
+[root@www ~]# resize2fs /dev/vbirdvg/vbirdlv 6900M
+resize2fs 1.39 (29-May-2006)
+Please run 'e2fsck -f /dev/vbirdvg/vbirdlv' first.
+# 需要先进行磁盘检查
+[root@www ~]# e2fsck -f /dev/vbirdvg/vbirdlv
+...
+[root@www ~]# resize2fs /dev/vbirdvg/vbirdlv 6900M
+...
+[root@www ~]# mount /dev/vbirdvg/vbirdlv /mnt/lvm
+[root@www ~]# df /mnt/lvm
+...
+
+# 3. 降低 LV 的容量，同时我们知道 /dev/hda6 有 89 个 PE
+[root@www ~]# lvresize -l -89 /dev/vbirdvg/vbirdlv
+...
+[root@www ~]# lvdisplay
+# 4.1 先确认 /dev/hda6 是否将 PE 都移除了
+[root@www ~]# pvdisplay
+--- Physical volume ---
+PV Name /dev/hda6
+VG Name vbirdvg
+PV Size 1.40 GB / not usable 11.46 MB
+Allocatable yes (but full)
+PE Size (KByte) 16384
+Total PE 89
+Free PE 0      #重点
+Allocated PE 89
+PV UUID Z13Jk5-RCls-UJ8B-HzDa-Gesn-atku-rf2biN
+....(中间省略)....
+--- Physical volume ---
+PV Name /dev/hda10
+VG Name vbirdvg
+PV Size 2.80 GB / not usable 6.96 MB
+Allocatable yes
+PE Size (KByte) 16384
+Total PE 179
+Free PE 89     #重点
+Allocated PE 90
+PV UUID 7MfcG7-y9or-0Jmb-H7RO-5Pa5-D3qB-G426Vq
+# 没有被使用的 PE 在 /dev/hda10，此时得要搬移 PE
+
+[root@www ~]# pvmove /dev/hda6 /dev/hda10
+# pvmove 来源 PV 目标 PV ，可以将 /dev/hda6 内的 PE 全部移动到/dev/hda10
+
+# 4.2 将 /dev/hda6 移出 vbirdvg 中 
+[root@www ~]# vgreduce vbirdvg /dev/hda6
+Removed "/dev/hda6" from volume group "vbirdvg"
+
+[root@www ~]# pvscan
+...
+[root@www ~]# pvremove /dev/hda6
+Labels on physical volume "/dev/hda6" successfully wiped
 
 
+LVM的系统快照：
+将当时的系统信息记录下来，就好像照相记录一般。未来若有任何资料更动，则原始资料会被搬移到快照区，没有被更动的区域则由快照区与文件系统共享。
+由于快照区与原本的LV共享很多PE区块，因此快照区与被快照的LV必须要在同一个VG中。
 
+快照区的建立
+# 1. 先观察 VG 还剩下多少剩余容量
+[root@www ~]# vgdisplay
+...
 
+# 2. 将刚刚移除的 /dev/hda6 加入这个 VG
+[root@www ~]# pvcreate /dev/hda6
+Physical volume "/dev/hda6" successfully created
+[root@www ~]# vgextend vbirdvg /dev/hda6
+Volume group "vbirdvg" successfully extended
+...
 
+# 3. 利用 lvcreate 建立系统快照区，我们取名为 vbirdss，且给予 60 个 PE
+[root@www ~]# lvcreate -l 60 -s -n vbirdss /dev/vbirdvg/vbirdlv
+Logical volume "vbirdss" created
+# 上述的指令中最重要的是那个 -s 的选项，代表是 snapshot 快照功能之意
+# -n 后面接快照区的装置名称， /dev/.... 则是要被快照的 LV 完整档名。
+# -l 后面则是接使用多少个 PE 来作为这个快照区使用。
 
+[root@www ~]# lvdisplay
+...
 
+#4. 挂载快照装置
+[root@www ~]# mkdir /mnt/snapshot
+[root@www ~]# mount /dev/vbirdvg/vbirdss /mnt/snapshot
+[root@www ~]# df
+...
 
-
+#5. 卸载快照装置
+[root@www ~]# umount /mnt/snapshot
 
 
 
