@@ -612,7 +612,7 @@ Volume group "vbirdvg" successfully extended
 
 # 3. 利用 lvcreate 建立系统快照区，我们取名为 vbirdss，且给予 60 个 PE
 [root@www ~]# lvcreate -l 60 -s -n vbirdss /dev/vbirdvg/vbirdlv
-Logical volume "vbirdss" created
+Logical volume "vbirdss" created  #打印信息，不是指令
 # 上述的指令中最重要的是那个 -s 的选项，代表是 snapshot 快照功能之意
 # -n 后面接快照区的装置名称， /dev/.... 则是要被快照的 LV 完整档名。
 # -l 后面则是接使用多少个 PE 来作为这个快照区使用。
@@ -630,12 +630,108 @@ Logical volume "vbirdss" created
 [root@www ~]# umount /mnt/snapshot
 
 
+范例：利用快照区复原系统
+# 1. 先将原本的 /dev/vbirdvg/vbirdlv 内容作些变更，增增减减一些目弽吧！
+[root@www ~]# df /mnt/lvm
+...
+[root@www ~]# ll /mnt/lvm
+...
+[root@www ~]# rm -r /mnt/lvm/log
+...
+[root@www ~]# ll /mnt/lvm
+...
+[root@www ~]# lvdisplay /dev/vbirdvg/vbirdss
+...
+Allocated to snapshot 12.22%
+...
+# 从这里可以看出，忚照区已经被使用了 12.22%。因为原始的文件系统有改动过。
+
+# 2. 利用快照区将原本的 filesystem 备份
+[root@www ~]# mount /dev/vbirdvg/vbirdss /mnt/snapshot
+[root@www ~]# df
+...
+
+[root@www ~]# mkdir -p /backups <==确认真的有这个目录
+[root@www ~]# cd /mnt/snapshot
+[root@www snapshot]# tar -jcv -f /backups/lvm.tar.bz2 *
+# 此时你就会有一个备份资料，亦即是 /backups/lvm.tar.bz2
+
+# 3. 将 vbirdss 卸除并移除 (因为里面的内容已经备份起来了)
+[root@www ~]# umount /mnt/snapshot
+[root@www ~]# lvremove /dev/vbirdvg/vbirdss
+...
+[root@www ~]# umount /mnt/lvm
+[root@www ~]# mkfs -t ext3 /dev/vbirdvg/vbirdlv
+[root@www ~]# mount /dev/vbirdvg/vbirdlv /mnt/lvm
+[root@www ~]# tar -jxv -f /backups/lvm.tar.bz2 -C /mnt/lvm
+[root@www ~]# ll /mnt/lvm
+
+
+范例：利用快照区进行各项练习与测试的任务，再以原系统还原快照
+#1.建立一个大一些的快照区，将 /dev/hda6 的PE全部给快照区
+[root@www ~]# lvcreate -s -l 89 -n vbirds /dev/vbirdvg/vibrdlv
+...
+[root@www ~]# lvdisplay /dev/vbirdvg/vbirdss
+...
+
+#2.隐藏vbirdlv 挂载vbirdss
+[root@www ~]# umount /mnt/lvm
+[root@www ~]# mount /dev/vbirdvg/vbirdss /mnt/snapshot
+[root@www ~]# df /mnt/snapshot
+...
+
+# 3.做一些改动
+[root@www ~]# rm -r /mnt/snapshot/etc /mnt/snapshot/log
+[root@www ~]# cp -a /boot /lib /sbin /mnt/snapshot/
+[root@www ~]# ll /mnt/snapshot
+
+[root@www ~]# mount /dev/vbirdvg/vbirdlv /mnt/lvm
+[root@www ~]# ll /mnt/lvm
+...
+#不论在快照区如何做改动，原本的vbirdlv里面的数据不变
+
+#4还原原本快照区的数据，回到与原文件系统相同的信息
+[root@www ~]# umount /mnt/snapshot
+[root@www ~]# lvremove /dev/vbirdvg/vbirdss
+...
+[root@www ~]# lvcreate -s -l 89 -n vbirdss /dev/vbirdvg/vbirdlv
+[root@www ~]# mount /dev/vbirdvg/vbirdss /mnt/snapshot
+[root@www ~]# ll mnt/snapshot
+...
+#数据还原
+
+LVM指令汇总
+任务		    	PV阶段 		VG阶段		LV 阶段
+搜寻(scan) 			pvscan 		vgscan 		lvscan
+建立(create) 		pvcreate 	vgcreate 	lvcreate
+列出(display) 		pvdisplay 	vgdisplay 	lvdisplay
+增加(extend) 					vgextend 	lvextend(lvresize)
+减少(reduce) 					vgreduce 	lvreduce(lvresize)
+初除(remove) 		pvremove 	vgremove 	lvremove
+改变容量(resize) 							lvresize
+改变属性(attribute) pvchange 	vgchange 		lvchange
 
 
 
+将LVM的装置关闭并移除
+1.先卸除系统上面的LVM文件系统(包括快照与所有LV);
+2.使用lvremove移除LV;
+3.使用vgchange -a n VGname 让 VGname 这个 VG 不具有Active的标志;
+4.使用vgremove移除VG;
+5.使用pvremove移除PV;
+6.最后，使用fdisk修改ID回来。
 
-
-
+[root@www ~]# umount /mnt/lvm
+[root@www ~]# umount /mnt/snapshot
+[root@www ~]# lvremove /dev/vbirdvg/vbirdss  #先处理快照
+...
+[root@www ~]# lvremove /dev/vbirdvg/vbirdlv  #再处理原系统
+...
+[root@www ~]# vgchange -a n vbirdvg
+...
+[root@www ~]# pvremove /dev/hda(6,7,8,9,10)
+...
+最后再fdisk将磁盘ID改回来
 
 
 
