@@ -155,6 +155,7 @@ j:  工作的格式(jobs format);
 F S UID PID PPID C PRI NI ADDR SZ WCHAN TTY TIME CMD
 4 S 0 13639 13637 0 75 0 - 1287 wait pts/1 00:00:00 bash
 4 R 0 13700 13639 0 77 0 - 1101 - pts/1 00:00:00 ps
+(F：进程的标志（process flags），当 flags 值为 1 则表示此子程序只是 fork 但没有执行 exec，为 4 表示此程序使用超级管理员 root 权限)
 
 
 观察系统所有程序: ps aux   (注意：没有 "-")
@@ -330,15 +331,57 @@ Kill bash(17351) ? (y/N) y <==这个杀掉
 # 具有互动的功能。可以询问你是否要删除 bash 这个程序。要注意，若没有 -i 的参数，所有的 bash 都会被这个 root 给杀掉！包括 root 自己的 bash 。
 
 
+关于程序的执行顺序
+Prioruty 与 Nice 值
+PRI,priority(优先执行序),PRI值越低代表越优先。
+PRI(new) = PRI(old) + nice 
+
+nice值调节要点：
+1. nice 值可调整的范围为 -20 ~ 19;
+2. root 可随意调整自己或他人程序的Nice值，且范围为 -20 ~ 19;
+3. 一般用户仅可调整自己程序的Nice值，且范围仅为 0 ~ 19 (避免一般用户抢占系统资源);
+4. 一般使用者仅可将 nice 值越调越高，例如本来 nice 为 5 ，则未来仅能调整到大于5。
+这也就是说，要调整某个程序的优先执行序，就是调整该程序的nice值。设置程序nice值的两种方式：
+1. 一开始执行程序就立即给予一个特定的nice值：用nice指令;
+2. 调整某个已经存在的PID的nice值：用renice指令。
+
+nice: 新执行的指令即给予新的nice值
+[root@www ~]# nice [-n 数字] command
+选项与参数：
+-n: 后面接一个数值，数值的范围 -20~19
+
+范例：用root给一个nice值为-5，用于执行vi,并观察该程序
+[root@www ~]# nice -n -5 vi &
+[1] 18676
+[root@www ~]# ps -l
+F S UID PID PPID C PRI NI ADDR SZ WCHAN TTY TIME CMD
+4 S 0 18625 18623 0 75 0 - 1514 wait pts/1 00:00:00 bash
+4 T 0 18676 18625 0 72 -5 - 1242 finish pts/1 00:00:00 vi
+4 R 0 18678 18625 0 77 0 - 1101 - pts/1 00:00:00 ps
+# 原本的bash PRI 为 75 ，所以vi预设应为 75。不过由于给予nice为-5，
+# 因此vi的PRI降低了，但并非降低到70 ，因为核心还会动态调整。
+
 	
+renice: 已存在程序的nice重新调整
+[root@www ~]# renice [number] PID
+选项与参数：
+PID: 某个程序的ID	
 	
+范例：找出自己的bash PID,并将该PID的nice调整到10
+[root@www ~]# ps -l
+F S UID PID PPID C PRI NI ADDR SZ WCHAN TTY TIME CMD
+4 S 0 18625 18623 0 75 0 - 1514 wait pts/1 00:00:00 bash
+4 R 0 18712 18625 0 77 0 - 1102 - pts/1 00:00:00 ps
+
+[root@www ~]# renice 10 18625
+18625: old priority 0, new priority 10	
 	
-	
-	
-	
-	
-	
-	
+[root@www ~]# ps -l
+F S UID PID PPID C PRI NI ADDR SZ WCHAN TTY TIME CMD
+4 S 0 18625 18623 0 85 10 - 1514 wait pts/1 00:00:00 bash
+4 R 0 18715 18625 0 87 10 - 1102 - pts/1 00:00:00 ps	
+(整个nice值是可以在父程序-->子程序之间传递的。
+ 另外，除了renice之外，top同样也可以调整nice值)。
 	
 	
 	
