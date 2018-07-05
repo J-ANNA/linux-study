@@ -8,7 +8,7 @@ git config --global user.email "git绑定邮箱"
 
 二、 开启SSH服务
 如果是使用CentOS,则默认开启了SSH服务，可跳过
-Ubuntu 安装SSH: apt-get install git
+Ubuntu 安装SSH: apt-get install ssh
 查看SSH状态： ps -e | grep sshd
 
 三、生成SSH KEY
