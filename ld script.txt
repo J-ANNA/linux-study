@@ -1,0 +1,22 @@
+ld script 学习参考链接：
+https://blog.csdn.net/embinux/article/details/78357215   (详细)
+
+https://www.cnblogs.com/tureno/articles/3741143.html     （概述）
+
+
+linker script 是用来控制链接过程的，它的主要目的有两个： 
+1. 描述如何将输入文件的section映射到输出文件 
+2. 控制输出文件的内存布局 
+链接器总是使用linker script，如果你没有指定，它使用默认的linker script，可以使用如下命令来显示默认的链接脚本: 
+$ ld --verbose 
+使用-T选项来指定自己的链接脚本
+
+ELF: Excutable and Linkable Format (可执行连接格式)
+
+Entry(symbol): 使用 symbol 作为程序的开始执行点
+
+KEEP: 防止ld清除某些section
+
+PROVIDE(symbol = expression) : 定义 symbol
+
+ASSERT(exp,message) : 确保 exp 成立，否则连接器返回一个错误码退出，并打印处message 

@@ -83,7 +83,7 @@ chage [-ldEImMW] 账号名
 -m ：后面接天数，修改 shadow 第四字段(密码最短保留天数)
 -M ：后面接天数，修改 shadow 第五字段(密码多久需要进行变更)
 -W ：后面接天数，修改 shadow 第六字段(密码过期前警告日期)
-
+ 
 
 usermod: 进行账号相关数据的微调
 usermod [-cdegGlsuLU] username

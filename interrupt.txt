@@ -1,0 +1,68 @@
+中断类型：
+	外部中断：普通中断请求（IRQ）, 快速中断请求（FIQ）
+	异常中断: 由于处理器执行指令出错
+
+
+IDT: 中断向量描述符表（中断向量表）
+IDTR: 中断描述符表寄存器，用来保存中断描述符表的起始地址
+
+
+中断请求线：在后面也叫中断号，每个中断都会通过一个唯一的数值来标识，而这个值就称做中断请求线
+
+在2440芯片中，有些中断是需要共享一个中断寄存器中的一位，如EINT4——EINT7，它们是共享寄存器SRCPEND的第4位。
+
+中断处理函数：
+在相应一个中断时，内核会执行该信号对应的一个函数，该函数就叫做该中断对应的中断处理函数。
+
+
+中断处理流程
+IRQ: 中断产生->SRCPND(是否接受该中断)->MAKS(中断是否被屏蔽)->PRIORITY(分配中断优先级)->INTPND(中断已被请求)->CPSR(切换工作模式)->CPU接收到中断->CPU中断处理程序
+FIQ:中断产生->SRCPND(是否接受该中断)->MODE(FIQ中断)->中断控制器->CPSR(切换工作模式)->CPU接收到中断->CPU中断处理程序
+
+
+注册中断处理函数：
+/*include */
+int request_irq(unsigned int irq, irq_handler_t handler,
+unsigned long irqflags, const char *devname, void *dev_id)
+使用：
+将中断号irq与中断处理函数handler对应
+参数：
+irq：指定要分配的中断号，中断号的定义在“include/mach/irqs.h”中。注意，不管是单独占有中断请求线的中断，还是共享中断请求线的每个中断，都有一个对应的中断号。，所以，调用该函数不需要考虑是哪种中断（是否共享寄存器），你想哪种中断响应，你就填对应的中断号。
+handler：中断处理函数指针。
+irqflags：中断处理标记
+devname：该字符串将显示在/proc/irq和/pro/interrupt中。
+dev_id：ID 号
+返回值：成功返回0，失败返回非0。
+注册函数需要注意两件事：
+1）该函数会睡眠。
+2）必须判断返回值。
+
+中断处理标志irqflags:
+/*linux-2.6.29/include/linux/interrupt.h*/
+29 #define IRQF_TRIGGER_NONE 0x00000000
+30 #define IRQF_TRIGGER_RISING 0x00000001 //上升沿触发中断
+31 #define IRQF_TRIGGER_FALLING 0x00000002 //下降沿触发中断
+32 #define IRQF_TRIGGER_HIGH 0x00000004 //高电平触发中断
+33 #define IRQF_TRIGGER_LOW 0x00000008 //低电平触发中断
+34 #define IRQF_TRIGGER_MASK (IRQF_TRIGGER_HIGH | IRQF_TRIGGER_LOW | \
+35 IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING)
+36 #define IRQF_TRIGGER_PROBE 0x00000010
+
+释放中断处理函数：
+void free_irq(unsigned int irq, void *dev_id)
+
+编写中断处理函数：
+static irqreturn_t intr_handler(int irq, void *dev_id)
+中断处理函数的返回值：
+IRQ_NONE(0) 中断程序接收到中断信号后发现这并不是注册时指定的中断原发出的中断信号
+IRQ_HANDLED(1) 接收到了准确的中断信号,并且作了相应正确的处理
+IRQ_RETVAL(x) //指定返回的数值，如果非0，返回IRQ_HADLER，否则返回IRQ_NONE
+#define IRQ_NONE (0)
+#define IRQ_HANDLED (1)
+#define IRQ_RETVAL(x) ((x) != 0) //这个宏只是返回0或非0
+
+
+
+操作流程：
+编写中断处理函数->注册中断处理函数->触发中断处理函数->释放中断处理函数
+

@@ -1,0 +1,242 @@
+mmap()系统调用形式如下：
+#include<sys/mman.h>
+
+void mmap(void *addr, size_t len, int prot,int flags, int fildes, off_t off)
+int msync(void *addr, size_t len, int flags);
+int munmap(void *addr, size_t len);
+
+
+mmap基础用例
+1)通过共享内存映射的方式修改文件
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include<fcntl.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<unistd.h>
+#include<error.h>
+
+int main(int argc, char * argv[])
+{
+     int fd, nread;
+     struct stat sb;
+     char *mapped;
+
+//打开文件
+      if((fd = open(argv[1], O_RDWR)) < 0){
+           perror("open") ;
+      }   
+
+//获取文件的属性
+      if((fstat(fd, &sb)) == -1 ){
+           perror("fstat") ;
+      }   
+      
+     
+//将文件映射至进程的地址空间
+      if((mapped = mmap(NULL, sb.st_size, PROT_READ|\
+               PROT_WRITE, MAP_SHARED, fd, o)) ==(void*) -1){
+           perror("mmap") ;
+      }   
+     
+//修改一个字符，同步到磁盘文件
+      mapped[20] = '9';
+      if((msync((void *)mapped, sb.st_size, MS_SYNC)) == -1){
+           perror("msync") ;
+      
+//释放存储映射区
+      if((munmap((void *)mapped,sb.st_size)) == -1){
+           perror("munmap");  
+      }   
+                 
+      return 0;
+}
+
+2)私有映射无法修改文件
+1 //将文件私有映射到进程的地址空间
+2 if((mapped = (char *)mmap(NULL,sb.st_size,PROT_READ|
+3                     PROT_WRITE, MAP_PRIVATE, fd, 0))==(void *)-1){
+4         perror("mmap");
+
+
+使用共享内存映射实现两个进程之间的通信
+进程A的代码：
+#include <sys/mman.h>  
+#include <sys/stat.h>  
+#include <fcntl.h>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <unistd.h>  
+#include <error.h>  
+            
+int main(int argc, char **argv)  
+{  
+        int fd, nread;  
+        struct stat sb;  
+        char *mapped;  
+     
+      
+/* 打开文件 */  
+        if ((fd = open(argv[1], O_RDWR)) < 0) {  
+            perror("open");  
+        }  
+      
+/* 获取文件的属性 */  
+        if ((fstat(fd, &sb)) == -1) {  
+            perror("fstat");  
+        }  
+      
+/* 将文件映射至进程的地址空间 */  
+        if ((mapped = (char *)mmap(NULL, sb.st_size, PROT_READ            | PROT_WRITE, MAP_SHARED, fd, 0)) == (void *)-1) {  
+            perror("mmap");  
+        }  
+      
+/* 文件已在内存, 关闭文件也可以操纵内存 */  
+        close(fd);  
+          
+/* 每隔两秒查看存储映射区是否被修改 */  
+        while (1) {  
+            printf("%s\n", mapped);  
+            sleep(2);  
+        }  
+      
+        return 0;  
+}
+
+进程B的代码：
+#include <sys/mman.h>  
+#include <sys/stat.h>  
+#include <fcntl.h>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <unistd.h>  
+#include <error.h>  
+        
+int main(int argc, char **argv)  
+{  
+	 int fd;  
+	 struct stat sb;  
+	 char *mapped;  
+	  
+/* 打开文件 */  
+	 if ((fd = open(argv[1], O_RDWR)) < 0) {  
+		 perror("open");  
+	 }  
+   
+/* 获取文件的属性 */  
+	 if ((fstat(fd, &sb)) == -1) {  
+		 perror("fstat");  
+	 }  
+/* 私有文件映射将无法修改文件 */  
+	 if ((mapped = (char *)mmap(NULL, sb.st_size, PROT_READ 
+				|PROT_WRITE,MAP_PRIVATE, fd, 0)) == (void*)-1) {  
+		 perror("mmap");  
+	 }  
+   
+/* 映射完后, 关闭文件也可以操纵内存 */  
+	 close(fd);  
+   
+/* 修改一个字符 */  
+	 mapped[20] = '9';  
+   
+	 return 0;  
+}
+
+
+通过匿名映射实现父子进程通信
+#include <sys/mman.h>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <unistd.h>  
+      
+ #define BUF_SIZE 100  
+      
+int main(int argc, char** argv)  
+{  
+        char    *p_map;  
+      
+/* 匿名映射,创建一块内存供父子进程通信 */  
+        p_map = (char *)mmap(NULL, BUF_SIZE, PROT_READ |      PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);  
+      
+        if(fork() == 0) {  
+            sleep(1);  
+            printf("child got a message: %s\n", p_map);  
+            sprintf(p_map, "%s", "hi, dad, this is son");  
+            munmap(p_map, BUF_SIZE); //实际上，进程终止时，会自动解除映射。  
+            exit(0);  
+        }  
+      
+        sprintf(p_map, "%s", "hi, this is father");  
+        sleep(2);  
+        printf("parent got a message: %s\n", p_map);  
+      
+        return 0;  
+}
+
+
+
+对mmap()返回地址的访问：
+文件大小，mmap()的参数len都不能决定进程能访问的大小，而是容纳文件被映射部分的最小页面数决定进程能访问的大小
+
+#include <sys/mman.h>  
+#include <sys/types.h>  
+#include <sys/stat.h>  
+#include <fcntl.h>  
+#include <unistd.h>  
+#include <stdio.h>  
+      
+ int main(int argc, char** argv)  
+ {  
+        int fd,i;  
+        int pagesize,offset;  
+        char *p_map;  
+        struct stat sb;  
+      
+ /* 取得page size */  
+        pagesize = sysconf(_SC_PAGESIZE);  
+        printf("pagesize is %d\n",pagesize);  
+      
+/* 打开文件 */  
+        fd = open(argv[1], O_RDWR, 00777);  
+        fstat(fd, &sb);  
+        printf("file size is %zd\n", (size_t)sb.st_size);  
+      
+        offset = 0;   
+        p_map = (char *)mmap(NULL, pagesize * 2,  PROT_READ|PROT_WRITE,   MAP_SHARED, fd, offset);  
+        close(fd);  
+          
+        p_map[sb.st_size] = '9';  /* 导致总线错误 */  
+        p_map[pagesize] = '9';    /* 导致段错误 */  
+      
+        munmap(p_map, pagesize * 2);  
+      
+       return 0;  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

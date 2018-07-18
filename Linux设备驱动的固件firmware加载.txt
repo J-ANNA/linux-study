@@ -1,0 +1,3 @@
+
+Linux 设备驱动的固件加载，参考链接：
+https://blog.csdn.net/zqixiao_09/article/details/51106663

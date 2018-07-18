@@ -1,5 +1,63 @@
 认识与学习BASH
 
+终端机环境设置
+ssty [-a]
+set [-uvCHhmBx]
+
+bash默认的组合按键
+[Ctrl]+c
+[Ctrl]+d
+[Ctrl]+m
+[Ctrl]+s
+[Ctrl]+q
+[Ctrl]+u
+[Ctrl]+z
+
+通配符：*  ？ []  [-]  [^]
+
+特殊符号：#  \  |  ;  ~  $  &  !  /  >  >>  <  <<   ' '   " "  ``或者$()  ( )  { }
+
+数据流重定向
+<或<<  >或>>  2>或2>>
+
+命令执行的判断依据： ;  &&  ||
+
+x撷取命令：cut,grep
+cut -d '分隔符' -f fields
+cut -c 字符区间
+grep [-acinv] [--color=auto] '搜寻字符串' filename
+
+排序命令：sort, wc, uniq
+sort [-fbMnrutk] [file or stdin]
+
+uniq [-ic]
+
+wc: 统计文档行、字数、字符
+wc [lwm]
+
+tee: 双重导向
+tee [-a] file 
+
+字符转换命令：tr,col,join,paste,expand
+tr [-ds] SET1 ...
+col [-xb]
+
+join:对比后合并（记得先sort）
+join [-ti12] file1 file2
+
+paste:直接将两行贴在一起，中间以[tab]（预设）隔开
+paste [-d] file1 file2 
+
+expand:将[Tab]转成空格
+expand [-t] file 
+
+split:分割命令
+split [-bl] file PREFIX
+
+xargs: 参数代换
+xargs [-0epn] command
+
+
 终端机的环境设置：stty,set
 stty [-a]
 参数：
@@ -211,7 +269,7 @@ paste [-d] file1 file2
 - ：如果file部分写成 - ,表示来自standard input
 范例：
 paste /etc/passwd /etc/shadow
-cat /etc/group | paste /etc/shadow /etc/shadow - | head -n 3
+cat /etc/group | paste /etc/shadow - | head -n 3
 
 expand [-t] file
 选项与参数：
@@ -249,7 +307,7 @@ cut -d ':' -f 1 /etc/passwd | head -n 3 | xargs finger
 (由xargs将三个账号名称变成finger后面需要的参数)
 
 范例：将所有的/etc/passwd 内的账号都以finger查阅，但一次仅查阅五个账号
-cut -d 'd' -f 1 /etc/passwd | xargs -p -e'lp' finger //-e'lp'中间没有空格
+cut -d 'd' -f 1 /etc/passwd | xargs -p -n 5 finger 
 
 关于减号 - 的用途
 在管线命令当中，常常会使用到前一个指令的stdout作为这次的stdin,某些指令需要用到文件名(例如tar)来进行处理时，该stdin 与 stdout 可以利用减号'-'来替代，例如：
