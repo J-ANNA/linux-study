@@ -1,0 +1,40 @@
+gcc 知识
+
+linux下安装gcc详解 链接：
+https://www.cnblogs.com/yadongliang/p/6100003.html
+https://www.cnblogs.com/Hxinguan/p/5016305.html
+
+1. 安装
+yum -y install gcc gcc-c++ autoconf pcre pcre-devel make automake
+yum -y install wget httpd-tools vim
+
+2.查看gcc版本信息
+gcc --version
+
+3.测试
+1). 创建ctest.c文件
+#include <stdio.h>
+
+int main()
+{
+printf("hello world!\n");
+return 0;
+}
+
+2). 编译gcc ctest.c
+gcc -o test ctest.c
+
+3). 执行
+./test
+
+
+gcc [-oESc] [-wall] file
+选项与参数：
+-o: 指定生成的输出文件
+-E: 仅执行编译预处理
+-S: 将c代码转换为汇编代码
+-wall: 显示警告信息
+-c: 仅执行编译操作，不进行连接操作
+
+file: 指定c语言源代码文件
+

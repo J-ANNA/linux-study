@@ -1,0 +1,10 @@
+Samba 在Linux系统上实现的SMB(Server Messages Block,信息服务块)协议的一款免费软件。
+
+参考链接：https://www.cnblogs.com/zhanglei93/p/6864108.html
+
+
+/etc/samba
+
+sudo service smbd restart
+
+\\10.193.101.97

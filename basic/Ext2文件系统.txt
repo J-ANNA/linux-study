@@ -1,0 +1,579 @@
+Linux 的 Ext2 文件系统
+
+data block(数据块）:
+Ext2文件系统中所支持的block大小有 1kb,2kb,4kb三种。
+block大小                1kb             2kb             4kb
+最大单一文件限制          16GB           256GB            2TB
+最大文件系统总容量        2TB             8TB             16TB
+
+Ext2文件系统的block的基本限制：
+1）原则上，block的大小与数量在格式化完就不能再改变了（除非重新格式化）；
+2）每个block内最多只能够放置一个文件的数据；
+3）承上，如果文件大于 block 的大小，则一个文件会占用多个 block 数量；
+4）承上，若文件小于 block,则该block剩余空间就不能够再被使用了（磁盘空间会浪费）。
+
+inodetable (inode 表格）
+inode的内容主要记录文件的属性以及该文件实际数据是放置在哪几号block内。基本上，inode记录的文件数据至少有下面这些：
+1）该文件的访问模式（read/write/excute);
+2) 该文件的所有者与组（owner/group);
+3) 该文件的大小；
+4）该文件创建或状态改变的时间（ctime);
+5) 最近一次的读取时间（atime);
+6) 定义文件特性的标志（flag),如 SetUID等；
+该文件真正内容的指向（pointer);
+
+inode的特色：
+1）每个inode大小均固定为128bytes;
+2) 每个文件都仅会占用一个 inode 而已；
+3）承上，因此文件系统能够创建的文件数量与 inode 的数量有关；
+4）系统读取文件时需要先找到 inode,并分析 inode 所记录的权限与用户是否符合，若符合才能够开始实际读取 block 的内容。
+5）将 inode 记录 block 号码区域定义为12个直接、一个间接、一个双间接、一个三间接记录区：
+   因此最大文件大小为  = 12 + 256 + 256x256 + 256x256x256 (x1k) = 16GB
+   (该计算方法不适用于2KB及4KB的block大小的计算，因为大于2KB的block将会受到Ext2文件系统本省的限制，所以计算的结果会不太符合之故）
+
+
+Superblock(超级块）：
+Superblock 是记录整个文件系统相关信息的地方，没有Superblock,就没有这个文件系统了。
+它记录的信息主要有：
+1）block 与 inode 的总量；
+2）未使用与已使用的 inode/block 数量；
+3）block 与 inode 的大小（block 为 1K,2K,4K, inode 为 128bytes);
+4) 文件系统的挂载时间、最近一次写入数据的时间，最近一次检验磁盘（fsck)的时间等文件系统的相关信息；
+5）一个valid bit数值，若此文件系统已被挂载，则 valid bit 为 0；若未被挂载，则 valid bit 为 1。
+
+
+File system Description (文件系统描述说明)
+
+block bitmap (块对照表)
+
+inode bitmap (inode 对照表）
+
+
+每个区段与Supernlock 的信息都可以使用 dumpe2fs 这个命令来查询。
+dumpe2fs [-bh] 设备文件名
+参数：
+-b: 列出保留为坏道的部分；
+-h: 仅列出 superblock 的数据，不会列出其他的区段内容。
+
+范例：
+df       //这个命令可以调出目前挂载的设备
+
+dumpe2fs /dev/hdc2
+
+
+磁盘与目录的容量： df， du
+df: 列出文件系统的整体磁盘使用量；
+du: 评估文件系统的磁盘使用量(常用于评估目录所占容量）
+
+df
+df [-ahikHTm] 目录或文件名
+参数：
+-a: 列出所有的文件系统，包括系统特有的 /proc等文件系统；
+-k: 以KB的容量显示各文件系统；
+-m: 以MB的容量显示各文件系统；
+-h: 以人们较易阅读的 GB、MB、KB等格式自行显示；
+-H: 以M=1000K 替代 M=1024K的进制方式；
+-T: 连同该分区的文件系统名称（例如 ext3)也列出；
+-i: 不用硬盘容量，而以 inode 的数量来显示。
+
+范例：
+df
+df -h
+df -aT
+df -h /etc
+df -ih
+
+
+du:
+du [-ahskm] 文件或目录名称
+选项与参数：
+-a: 列出所有的文件与目录容量，因为默认仅统计目录下面的文件量而已；
+-h: 以人们较易读的容量格式(G/M)显示；
+-s: 列出总量而已，而不列出每个个别的目录占用容量；
+-S: 不包括子目录下的总计，与 -s 有点差别；
+-k: 以KB列出容量显示；bb 
+-m: 以MB列出容量显示。
+
+范例：
+du
+du -a
+du -sm /*
+
+
+连接文件：ln
+hard link (硬连接或实际连接)
+只是在某个目录下新建一条文件名连接到某inode号码的关联记录而已。
+范例：
+ln /etc/crontab .
+ll -i /etc/crontab /root/crontab
+
+hard link 的限制：
+1.不能跨文件系统；
+2.不能连接到目录。
+
+
+symbolic link (符号连接，也即是快捷方式）
+就是在创建一个独立的文件，而这个文件会让数据的读取指向它连接的那个文件的文件名。
+范例：
+ln -s /etc/crontab crontab
+ln -i /etc/crontab /root/crontab2
+
+
+ln [-sf] 源文件 目标文件
+参数：
+-s: 如果不加任何参数就进行连接，那就是 hard link，至于 -s 就是 symbolic link
+-f: 如果目标文件存在时，就主动将目标文件直接删除后再创建
+
+范例：
+cd /tmp
+cp -a /etc/passwd .
+du -sb; df -i .
+
+
+ln passwd passwd-hd
+du -sb; df -i .
+
+
+ls -il passwd*
+
+ln -s passwd passwd-so
+ls -li passwd*
+
+du -sb; df -i .
+
+
+rm passwd           //passwd-so变为红色 说明连接不存在（若存在为绿色）
+cat passwd -hd
+
+cat -passwd-so
+
+ll passwd*
+
+
+关于目录的连接数量：
+当我们新建一个新的目录时，新的目录的连接数为2，而上层目录的连接数则会增加1.
+
+
+磁盘分区
+fdisk [-l] 设备名称
+
+删除磁盘分区
+1. fdisk/dev/hdc: 先进入fdisk界面；
+2. p: 先看一下分区的信息，假设要删掉 /dev/hdc1;
+3. d: 选择要删除的分区，比如 1；
+4. w(or)q: 按 w 可存储到磁盘数据中，并离开 fdisk; 按 q 取消刚的操作并离开。
+
+范例：
+fdisk /dev/hdc
+p
+d
+4
+w
+
+新增磁盘分区
+新增主分区：
+fdisk /dev/hdc
+n
+p
+4
+[enter]       //开始柱面
++512M         //结束柱面
+p
+
+新增扩展分区   //扩展分区只能有一个
+n
+e
+1
+[enter]   //开始柱面
+5005       //提示最大值，扩展分区最好能够包含所有未分区的区间
+p
+
+新增一个 2G 逻辑分区
+n
+l
+[enter]
++2048M
+p
+
+
+partprobe  //强制让内核重新找一次分区表
+
+
+磁盘格式化
+mkfs  (即 make file system)
+mkfs [-t 文件系统格式] 设备文件名
+
+范例：
+mkfs -t ext3 /dev/hdc6
+（filesystem label=         //分区的名称
+Block size=4096 (log=2)         //block 的大小设置为 4K
+251392 inodes, 502023 blocks    //由此设置决定的 inode / block 数量
+Creating journal (8192 blocks) : done  //有日志记录） 为提示信息
+
+设置具体参数：
+mke2fs:
+mke2fs [-b block大小] [-i block大小] [-L 卷标] [-cj] 设备
+参数：
+-b: 可以设置每个 block 的大小，目前支持 1024,2048,4096 bytes 三种；
+-i: 多少容量给予一个inode;
+-c: 检查磁盘错误，仅下达一次 -c 时，会进行快速读取测试；
+    如果下达两次 -c -c 的话，会测试读写（read-write)；
+-L: 后面可以接卷标名称(label),这个 label 是有用的；
+-j: 本来 mke2fs 是 EXT2,加上 -j 后，会主动加入journal 而成为 EXT3.
+
+范例：
+mke2fs -j -L "vbird_logical" -b 2048 -i 8192 /dev/hdc6
+
+(如果没有特殊需求的话，使用 "mkfs -t ext3 ...",不但容易记忆，而且非常好用)
+
+
+磁盘检验：fsck,badblocks
+fsck (file system check)
+fsck [-t 文件系统] [-ACay] 
+参数：
+-t: 指定文件系统,（linux会通过 super block 去分辨文件系统）
+-A: 依据 /etc/fstab 的内容，将需要的设备扫描一次。 
+-a: 自动修复检查到的有问题的扇区，所以不用一直按 y.  (重要)
+-y: 与 -a 类似， 但是某些文件系统仅支持 -y 这个参数。
+-C: 可以在检验的过程当中使用一个直方图来显示目前的进度。
+
+EXT2/EXT3 的额外参数功能（e2fsck 这个命令所提供)
+-f: 强制检查，一般来说，如果fsck 没有发现任何 unclean的标志，不会主动进入细化检查的，如果你想要强制 fsck 进入细化
+    检查，就得加上 -f 标志。
+-D: 针对文件系统下的目录进行优化配置。
+
+范例：
+强制将 /dev/hdc6 这个设备检验一下
+fsck -C -f -t ext3 /dev/hdc6
+查看系统有多少文件系统支持的fsck 软件
+
+注：我们的系统实际执行的 fsck 命令，其实是调用 e2fsck 这个软件。 可以用 mane2fsck 找到更多的参数辅助。
+
+
+检查硬盘或软盘扇区有没有坏轨
+badblcoks
+badlocks -[svw] 设备名称
+参数：
+-s: 在屏幕上列出进度；
+-v: 可以在屏幕上看到进度；
+-w: 使用写入的方式来测试，建议不要使用此参数，尤其是待检查的设备已有文件时！
+
+范例：
+badlocks -sv /dev/hdc6
+(注：由于这个命令其实可以通过 "mke2fs -c 设备文件名"在进行格式化的时候处理磁盘表面的读取测试，因此目前大多不使用这个命令)
+ 
+
+
+
+磁盘挂载与卸载
+在进行挂载前，必须确定的几件事：
+1. 单一文件系统不应该被重复挂载在不同的挂载点（目录）中；
+2. 单一目录不应该重复挂载多个文件系统；
+3. 作为挂载点的目录理论上应该是空目录才是。（如果并不是空的，那么挂载了文件系统之后，目录下的东西就会暂时隐藏。）
+
+mount
+mount -a
+mount [-l]
+mount [-t 文件系统] [-L Label名] [-o 额外选项] [-n] 设备文件名 挂载点
+参数：
+-a: 依照配置文件 /etc/fstab 的数据将所有未挂载的磁盘都挂载上来；
+-l: 单纯输入 mount 会显示目前挂载的信息，加上 -l 可增列 Label 名称；
+-t: 加上文件系统种类来指定欲挂载的类型；
+-n: 在默认的情况下，系统会将实际挂载的情况实时写入 /etc/mtab 中，以利其他程序的运行。但在某些情况下（例如单用户维护模式）为了避免问题。会刻意不写入。此时就得使用这个 -n 的参数了。
+-L: 利用文件系统的卷标名称（Label)来进行挂载。
+-o: 后面可以接一些挂载时额外加上的参数，比如账号、密码、读写权限等：
+	ro,rw: 挂载文件系统成为只读(ro)或可读写(rw).
+	async, sync: 此文件系统是否使用同步写入(sync)或异步(async)的内存机制。
+	auto, noauto: 允许此分区被以 mount -a 自动挂载(auto).
+	dev, nodev: 是否允许此分区上可创建设备文件。(dev为可允许)
+	suid, nosuid: 是否允许此分区含有 suid/sgid 的文件格式；
+	exec, noexec: 是否允许此分区上拥有可执行 binary 文件；
+	user, nouser: 是否允许此分区让任何用户执行 mount。一般来说，mount 仅有 root 可以进行，但下达 user 参数，则可让一般 user 也能够对此分区进行 mount。
+	defaults: 默认值为 rw, suid, dev, exec, auto, nouser, and async
+	remount: 重新挂载，这在系统出错，或重新更新参数时，很有用。
+	
+
+挂载 EXT2/EXT3 文件系统
+范例：用默认的方式将刚才创建的 /dev/hdc6 挂载到 /mnt/hdc 上面。
+mkdir /mnt/hdc6
+mount /dev/hdc6 /mnt/hdc6
+df 
+
+参考文件：
+/etc/filesystems: 系统指定的测试挂载文件系统类型；
+/proc/filesystems: Linux系统已经加载的文件系统类型。
+/lib/modules/$(uname -r)/kernel/fs/
+
+
+挂载CD或DVD光盘
+mkdir /media/cdrom
+mount -t iso9660 /dev/cdrom /media/cdrom
+mount /dev/cdrom /media/cdrom
+df
+
+
+格式化与挂载软盘
+软盘的格式化可以直接使用 mkfs 即可。但是软盘也是可以格式化成为 ext3 或 vfat 格式的。
+挂载的时候我们同样使用系统的自动测试挂载即可。
+范例：
+mkfs -t vfat /dev/fd0
+mkdir /media/floppy
+mount -t vfat /dev/fd0 /media/floppy
+df
+
+挂载U
+mkdir /mnt/flash
+mount -t vafat -o iocharset=cp950 /dev/sda1 /mnt/flash
+df
+
+重新挂载根目录与挂载不特定目录
+mount -o remount,rw,auto/
+mkdir /mnt/home
+mount --bind /home /mnt/home   //通过 mount --bind 可以将某个目录挂载到其它目录去，而不是整块文件系统。
+
+
+umount (将设备文件卸载)
+umount [-fn] 设备文件名或挂载点
+参数：
+-f: 强制卸载。可用在类似网络文件系统(NFS)无法读取到的情况下；
+-n: 不更新 /etc/mtab 的情况下卸载。
+
+范例：
+umount /dev/hdc6   //用设备文件名来卸载
+umount /mnt/flash  //用挂载点来卸载
+umount /mnt/home    //挂载的是目录时，一定要用挂载点
+
+使用 Label name 进行挂载的方法
+mount -L "vbird_logical" /mnt/hdc6 
+(好处：系统不必知道该文件系统所在的接口与磁盘文件名)
+
+
+
+磁盘参数修改
+mknod 设备文件名 [bcp] [Major] [Minor]
+参数：
+设备种类：
+	b: 设置设备名称成为一个外部存储设备文件，例如硬盘；
+	c: 设置设备名称成为一个外部输入设备文件，例如鼠标/键盘等；
+	p: 设置设备名称成为一个 FIFO 文件。
+Major: 主设备代码；
+Minor: 次设备代码。
+范例：
+设置 /dev/hdc10 为外部存储文件，设备代码为 22,10
+mknod /dev/hdc10 b 22 10
+ll /dev/hdc10
+创建一个FIFO文件，文件名为 /tmp/testpipe
+mknod /temp/testpipe p
+ll /tmp/testpipe
+
+
+
+e2label 修改卷标
+优点：不论磁盘文件名怎么变，不论你将硬盘插在哪个 IDE/SATA 接口，由于系统是通过Lable,所以磁盘插在哪个接口将不会影响。
+缺点: 如果插了两块硬盘，刚好两块硬盘的 Label 有重复的，系统可能无法判断哪个磁盘分区才是正确的
+
+e2label 设备名称 新的Label名称  
+范例：
+将 /dev/hdc6 的卷标改成 my_test 并查看是否修改成功
+e2label /dev/hdc6 "my_test"
+
+tune2fs
+tune2fs [-jlL] 设备名称
+参数：
+-l: 类似 dumpe2fs -h 的功能。将 super block 内的数据读出来。
+-j: 将ext2的文件系统转换为ext3的文件系统。   （常用）
+-L: 类似 e2label 的功能，可以修改文件系统的Label。
+
+范例：
+列出 /dev/hdc6 的 super block 内容
+tune2fs -l /dev/hdc6
+
+
+hdparm 设置硬盘参数
+hdparm [-icdmXTt] 设备名称
+参数：
+-i: 将内核检测到的硬盘参数显示
+-c: 设置 32bit 访问模式(硬盘与PCI接口之间的传输模式)。硬盘本身依旧以 16 位模式在运行。默认这个设置值都会被打开，建议直接使用 c1 （01的1）即可。 
+-d: 设置是否启用 DMA 模式， -d1 为启动，-d0为取消。 （DMA: Direct Memory Access 直接内存访问）
+-m: 设置同步读取多个 sector 的模式。这个值的最大值，可以利用 hpparm -i /dev/hda 输出的 MaxMultSect 来设置。一般如果不知道，设置 16 是合理的。
+-X: 设置 UtraDMA 的模式。 
+-T: 测试暂存区 cache 的访问性能
+-t: 测试硬盘的实际访问性能  （较正确）
+
+范例：
+hdparm -i /dev/hdc
+hdparm -d1 -c1 -X69 /dev/hdc
+hdparm -Tt /dev/hdc
+
+
+开机挂载 /etc/fstab 及 /etc/mtab
+系统挂载的一些限制：
+1. 根目录/ 是必须挂载的，而且一定要先于其他 mount point 被挂载进来；
+2. 其他挂载点必须为已新建的目录，可任意指定，但一定要遵守必需的系统目录架构原则。
+3. 所有挂载点在同一时间之内，只能挂载一次。
+4. 所有分区在同一时间之内，只能挂载一次。
+5. 如若进行卸载，必须先将工作目录移到挂载点（及其子目录）之外。
+
+范例：
+将 /dev/hdc6 每次开机都自动挂载到 /mnt/hdc6
+nano /etc/fstab              // /etc/fstab 文件内容格式：Device    Mount point    filesystem    parameters    dump    fsck 
+/dev/hdc6 /mnt/hdc6 ext3 defaults 1 2
+df 
+umount /dev/hdc6   //如果 /dev/hdc6 之前被挂载过，需先卸载
+mount -a
+df 
+
+万一发生在 /etc/fstab 中输入的数据有误，导致无法顺利开机，解决办法
+mount -n -o remount,rw /
+
+
+
+特殊设备loop 挂载 (镜像文件不刻录就挂载使用)
+挂载光盘/DVD镜像文件
+范例：
+mkdir /mnt/centos_dvd
+mount -o loop /root/centos5.2_x86_64.iso /mnt/centos_dvd
+df
+
+新建大文件以制作loop设备文件
+1. 创建大型文件
+dd if=/dev/zero of=/home/loopdev bs=1M count=512
+这个命令的简单意义如下：
+if: input file, 输入文件。 那个 /dev/zero 是会一直输出 0 的设备
+of: output file, 将一堆零写入到后面接的文件中。
+bs: 每个 block 大小，就像文件系统那样的 block。
+count: 总共几个 bs 的意思。
+
+ll -h /home/loopdev
+
+2. 格式化
+mkfs -t ext3 /home/loopdev
+
+3. 挂载 
+mount -o loop /home/loopdev /media/cdrom
+
+
+
+内存交换空间(swap)的构建
+1.分区
+2.格式化
+3.使用 
+4.查看 
+
+范例：分出256MB的磁盘分区，然后将这个磁盘分区做成 swap
+1.分区 
+fdisk /dev/hdc 
+n
++256
+p 
+t        //修改系统ID
+7        //指定分区 7号
+82       //改成 swap 的 ID
+p 
+w
+partprobe    //重要，让内核更新分区表
+
+2.开始构建 swap 格式 
+mkswap /dev/hdc7
+
+3.开始查看与加载
+free               //查看 
+swapon /dev/hdc7   //加载
+free              
+swapon -s          //列出目前使用的 swap 设备有哪些
+
+4.关闭
+swapoff /dev/hdc7
+
+
+使用文件构建 swap 
+范例：
+1. 使用dd这个命令来新增一个 128MB的文件
+dd if=/dev/zero of=/tmp/swap bs=1M count=128
+ll -h /tmp/swap
+
+2. 使用 mkswap 将 /tmp/swap 这个文件格式化为 swap 的文件格式；
+mkswap /tmp/swap
+
+3. 使用swapon来将 /tmp/swap 启动
+free
+swapon /tmp/swap
+free
+swap -s 
+
+4.使用 swapoff 关掉 swap file
+swapoff /tmp/swap
+free 
+
+swap被创建时，是有限制的：
+1. 在内核 2.4.10 版本以后，单一 swap 已经没有 2GB的限制了。
+2. 但是，最多还是仅能创建32个swap
+3. 由于目前 x86_64(64位)最大内存寻址到64GB,因此，swap总量最大也是仅能达64GB。
+
+
+利用GNU的 parted 进行分区行为
+parted [设备] [命令 [参数]]
+参数：
+命令功能：
+新增分区：mkpart [primary | logical | extended] [ext3 | vfat] 开始 结束 
+分区表：print
+删除分区：rm [partition]
+
+范例：以parted 列出目前本机的分区表资料
+parted /dev/hdc print 
+范例：新建一个约为 512MB的逻辑分区
+parted /dev/hdc mkpart logical ext3 19.2GB 19.7GB 
+parted /dev/hdc print
+范例：将刚才新建的第八号磁盘分区删除
+parted /dev/hdc rm 8  //8:磁盘号码
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,721 @@
+linux账号管理与ACL权限设定
+
+UID GID
+/etc/group
+/etc/passwd
+/etc/shadow
+
+effective group  / initial group
+
+//设定次要群组
+usermod -G users dmtsai
+//查看当前账号支持的群组
+groups
+//有效群组的切换
+newgrp users  //(新取得一个shell执行操作，输入exit回到原本的环境和shell)
+
+
+账号管理
+新建用户(useradd)
+useradd [-u UID] [-g 初始群组] [-G 次要群组] [-mM] [-c 说明栏] [-d 家目录绝对路径] [-s shell] 使用者账号名
+选项与参数：
+-u: 后面接的是UID,十一组数字。直接指定一个特定的UID给这个账号;
+-g：后面接的那个组名就是 initial group
+-G: 后面接的组名则是这个账号还可以加入的群组。这个选项与参数会修改 /etc/group 内的相关资料
+-M: 强制！不要建立用户 /home 目录 (系统账号默认值)
+-m: 强制！要建立用户 /home 目录 (一般账号默认值)
+-c: /etc/passwd 的第五栏的说明内容。可以谁便设定
+-d: 指定某个目录成为 /home 目录，而不要使用默认值。务必使用绝对路径
+-r: 建立一个系统账号，这个账号的UID会有限制(参考 /etc/login.defs)
+-s: 后面接一个shell,若没有指定则是预设是 /bin/bash
+-e: 后面接一个日期，格式为"YYYY-MM-DD"此项目可写入shadow第八字段，亦即账号失效的设定项目
+-f: 后面接 shadow 的第七字段项目，指定密码是否会失效。0为立刻失效，-1为永远不失效(密码只会过期而强制于登入时重新设定而已)
+
+范例：
+//完全参考默认值建立一个用户
+useradd vbird1
+ll -d /home/vbird1
+//users为初始群组，以及uid为700来建立一个名为vbird的账号
+useradd -u 700 -g users vbird2
+//建立一个系统账号，名为vbird3
+useradd -r vbird3
+
+用户账号与密码参数方面的文档：/etc/passwd, /etc/shadow
+使用者群组相关方面的文档：/etc/group, /etc/gshadow
+用户的 /home 目录：/home/账号名称
+
+使用 useradd 这支程序在建立 Linux 上的账号时，至少会参考：
+/etc/default/useradd
+/etc/login.defs
+/etc/skel/*
+
+
+passwd
+passwd [--sdtin]  //所有人均可使用来改自己的密码
+passwd [-l] [-u] [--stdin] [-S] [-n 日数] [-x 日数] [-w 日数] [-i 日期] 账号 //root 功能
+选项与参数：
+--stdin: 可以透过来自前一个管线的数据，作为密码输入，对shell script 有帮助
+-l: lock, 会在 /etc/shadow 第二栏最前面加上"!"，使密码失效
+-u: 与 -l 相反，unlock
+-S: 列出密码相关参数，亦即 shadow 文档内的大部分信息
+-n: 后面接天数，shadow的第4字段，多久不可修改密码天数
+-x: 后面接天数，shadow的第5字段，多久内必须要更动密码
+-w: 后面接天数，shadow的第6字段，密码过期前的警告天数
+-i: 后面接"日期"，shadow的第7字段，密码失效日期
+
+
+passwd vbird2  //设定指定账户密码
+passwd         //设置当前账号密码
+echo "abc543CC" | passwd --stdin vbird1
+passwd -S vbird1
+passwd -x 60 -i 10 vbird2
+passwd -l vbird1
+passwd -u vbird1 
+
+
+chage: 详细的密码参数显示功能
+chage [-ldEImMW] 账号名
+选项与参数：
+-l: 列出该账号的详细密码参数
+-d: 后面接日期，修改shadow第三字段(最近一次更改密码的日期)，格式YYYY-MM-DD
+-E ：后面接日期，修改 shadow 第八字段(账号失效日)，格式 YYYY-MM-DD
+-I ：后面接天数，修改 shadow 第七字段(密码失效日期)
+-m ：后面接天数，修改 shadow 第四字段(密码最短保留天数)
+-M ：后面接天数，修改 shadow 第五字段(密码多久需要进行变更)
+-W ：后面接天数，修改 shadow 第六字段(密码过期前警告日期)
+ 
+
+usermod: 进行账号相关数据的微调
+usermod [-cdegGlsuLU] username
+选项与参数：
+-c：后面接账号的说明，即 /etc/passwd 第五栏的说明栏，可以加入一些账号的说明。
+-d ：后面接账号home目录，即修改 /etc/passwd 的第六栏；
+-e ：后面接日期，格式是 YYYY-MM-DD 也就是在 /etc/shadow 内的第八个字段数据
+-f ：后面接天数，为 shadow 的第七字段。
+-g ：后面接初始群组，修改 /etc/passwd 的第四个字段，亦即是 GID 的字段
+-G ：后面接次要群组，修改这个使用者能够支持的群组，修改的是 /etc/group
+-a ：与 -G 合用，可"增加次要群组的支持",而非"设定"
+-l ：后面接账号名称。亦即是修改账号名称， 即/etc/passwd 第一栏
+-s ：后面接 Shell 的实际文档，例如 /bin/bash 或 /bin/csh 等等。
+-u ：后面接 UID 数字，即 /etc/passwd 第三栏的资料；
+-L ：暂时将用户的密码冻结，让他无法登入。其实仅改 /etc/shadow 的密码栏。
+-U ：将 /etc/shadow 密码栏的 "!"拿掉，密码解冻
+
+范例：
+usermod -c "VBird's test" vbird2
+usermod -e "2009-12-31" vbird2
+
+给 vbird3 建立他的 home 目录
+ll -d ~vbird3
+ls:/home/vbird3:No such file or directory
+cp -a /etc/skel /home/vbird3
+chown -R vbird3:vbird3 /home/vbird3
+chmod 700 /home/vbird3
+ll -a ~vbird3
+
+userdel: 删除用户的相关数据
+userdel [-r] username
+选项与参数：
+-r: 连同用户的家目录也一起删除
+
+用户的数据有：
+用户账号/密码相关参数：/etc/passwd, /etc/shadow
+使用者群组相关参数：/etc/group, /etc/gshadow
+用户个人文档数据： /home/username, /var/spool/mail/username..
+
+
+一般身份用户常用的账号数据变更与查询指令
+finger: 查阅用户相关信息
+finger [-s] username 
+选项与参数：
+-s: 仅列出用户的账号、全名、终端机代号与登入时间等等
+-m: 列出与后面接的账号相同者，而不是利用部分比对(包括全名部分)
+
+范例：
+finger vbird1 
+范例2：
+利用 vbird1 建立自己的计划档
+echo "I will study Linux during this year." > ~/.plan
+finger vbird1
+范例3：找出目前在系统上面登入的用户和登陆时间
+finger
+
+
+chfn: 即 change finger, 修改用户的finger 数据
+chfn [-foph] [账号名]
+选项与参数：
+-f: 后面接完整的大名
+-o: 办公室的房间号码
+-p: 办公室的电话号码
+-h: 家里的电话号码
+
+
+chsh: 即change shell, 修改 shell
+chsh [-ls]
+选项与参数：
+-l: 列出目前系统上可用的shell, 其实就是 /etc/shells 的内容
+-s: 设定修改自己的 shell
+
+范例：
+chsh -l 
+chsh -s /bin/csh
+
+
+id: 查询UID/GID信息
+id [username]
+
+
+
+新增与移除群组
+groupadd [-g gid] [-r] 组名
+选项与参数：
+-g: 后面接某个特定的GID,用来直接给予某个GID
+-r: 建立系统群组，与 /etc/login.defs 内的 GID_MIN 有关
+范例：
+groupadd group1
+grep group1 /etc/group /etc/gshadow
+
+groupmod [-g gid] [-n group_name] 群组名
+选项与参数：
+-g: 修改既有的GID数字
+-n: 修改既有的组名
+范例：
+group -g 201 -n mygroup group1
+grep mygroup /etc/group /etc/gshadow
+
+groupdel [groupname]
+范例：
+groupdel mygroup
+(注意：删除群组前必须确认当前群组成员为空，否则无法删除)
+
+gpasswd: 群组管理员功能
+#关于系统管理员(root)做的动作：
+gpasswd groupname 
+gpasswd [-A user1,...] [-M user3,...] groupname 
+gpasswd [-rR] groupname
+选项与参数：
+  : 若没有任何参数时，表示给予groupname一个密码(/etc/gshadow)
+-A: 将groupname 的主控权交由后面的使用者管理(该群组的管理员) 
+-M: 将某些账号加入这个群组当中
+-r: 将 groupname 的密码移除
+-R: 让 groupname 的密码栏失效
+
+关于群组管理员(Group administrator)做的动作：
+gpasswd [-ad] user groupname
+选项与参数：
+-a: 将某位使用者加入到 groupname 这个群组当中
+-d: 将某位使用者移除出groupname 这个群组当中
+
+范例：使用者 pro1, pro2, pro3 是同一个项目计划的开发人员，我想要让这三个用户在同一个目录底下工作，但这三个用户还是拥有自己的家目与基本的私有群组。假设我要让这个项目计划在/srv/projecta 目录下开发， 可以如何进行？
+groupadd projectta
+useradd -G projecta -c "projecta user" pro1
+useradd -G projecta -C "projecta user" pro2
+useradd -G projecta -C "projecta user" pro3
+echo "passwd" | passwd --stdin pro1
+echo "passwd" | passwd --stdin pro2
+echo "passwd" | passwd --stdin pro3
+mkdir /srv/projecta
+chgrp projecta /srv/projecta
+chmod 2770 /srv/projecta   //2:SGID
+
+
+主机的细部权限规划: ACL的使用
+ACL: Access Control List
+主要可以针对几个项目：
+使用者 (user)：可以针对使用者来设定权限；
+群组 (group)：针对群组为对象来设定其权限；
+默认属性 (mask)：还可以针对在该目录下在建立新文档/目录时，规范新数据的默认权限；
+
+察看文件系统是否支持ACL:
+[root@www ~]# mount <==直接查阅挂载参数的功能
+/dev/hda2 on / type ext3 (rw)
+/dev/hda3 on /home type ext3 (rw)
+# 其他项目都将他省略了。假设我们只要看这两个装置。但没有看到acl
+[root@www ~]# dumpe2fs -h /dev/hda2 <==由 superblock 内容去查询
+....(前面省略)....
+Default mount options: user_xattr acl    //支持
+....(后面省略)
+
+手动添加acl支持：
+[root@www ~]# mount -o remount,acl /
+[root@www ~]# mount
+/dev/hda2 on / type ext3 (rw,acl)
+# 这样就加入了。但是如果想要每次开机都生效，那就这样做：
+[root@www ~]# vi /etc/fstab
+LABEL=/1 / ext3 defaults,acl 1 1
+
+ACL的设定技巧：getfacl, setfacl
+getfacl: 取得某个文档/目录的ACL设定项目；
+setfacl: 设定某个文档/目录的ACL规范。
+
+setfacl [-bkRd] [{-m|-x} acl 参数] 目标文件名
+选项与参数：
+-m: 设定后续的acl参数给文档使用，不可与 -x 合用；
+-x: 删除后续的acl参数，不可与 -m 合用；
+-b: 移除所有的ACL设定参数；
+-k: 移除"预设"的ACL参数；
+-R: 递归设定acl,亦即包括次目录都会被设定起来；
+-d: 设定"预设acl参数"，只对目录有效，在该目录新建的数据会引用此默认值
+
+# 1. 针对特定使用者的方式：
+# 设定规范：u:[使用者账号列表]:[rwx]，例如针对 vbird1的权限规范rx ：
+[root@www ~]# touch acl_test1
+[root@www ~]# ll acl_test1
+-rw-r--r-- 1 root root 0 Feb 27 13:28 acl_test1
+[root@www ~]# setfacl -m u:vbird1:rx acl_test1
+[root@www ~]# ll acl_test1
+-rw-r-xr--+ 1 root root 0 Feb 27 13:28 acl_test1
+# 权限部分多了个 + ，且与原本的权限 (644) 看起来差异很大
+[root@www ~]# setfacl -m u::rwx acl_test1
+[root@www ~]# ll acl_test1
+-rwxr-xr--+ 1 root root 0 Feb 27 13:28 acl_test1
+# 无使用者列表，代表设定定该文档拥有者，所以上面显示 root 的权限成为 rwx了。
+(如果一个文档设定了ACL参数后，他的权限部分就会多出一个 + 号)
+
+
+getfacl filename
+选项与参数：
+getfacl 的选项几乎与setfacl相同
+
+# 2. 针对特定群组的方式：
+# 设定规范：g:[群组列表]:[rwx]，例如针对 mygroup1 的权限规范rx ：
+[root@www ~]# setfacl -m g:mygroup1:rx acl_test1
+[root@www ~]# getfacl acl_test1
+# file: acl_test1
+# owner: root
+# group: root
+user::rwx
+user:vbird1:r-x
+group::r--
+group:mygroup1:r-x <==这里就是新增的部分！多了这个群组的权限设定
+mask::r-x   <==使用者或群组所设定的权限必须要存在于 mask 的权限设定范围内才会生效，此即有效权限(effective permission)
+other::r--
+
+# 3. 针对有效权限 mask 的设定方式：
+# 设定规范：m:[rwx] ，例如针对刚刚的文档规范为仅有 r ：
+[root@www ~]# setfacl -m m:r acl_test1
+[root@www ~]# getfacl acl_test1
+# file: acl_test1
+# owner: root
+# group: root
+user::rwx
+user:vbird1:r-x #effective:r-- <==vbird1+mask 均存在者，仅有 r 而已！
+group::r--
+group:mygroup1:r-x #effective:r--
+mask::r--
+other::r--
+
+我们可以透过使用 mask来规范最大允许的权限，就能够避免不小心开放某些
+权限给其他使用者或群组了。 不过，通常都是将 mask 设定为 rwx，然后再分别依据不同的使用者/群组去规范她们的权限。
+
+
+# 4. 针对预设权限的设定方式：
+# 设定规范：d:[ug]:使用者列表:[rwx] 
+范例：
+# 让myuser1 在 /srv/projecta 底下一直具有 rx 的预设权限
+[root@www ~]# setfacl -m d:u:myuser1:rx /srv/projecta
+[root@www ~]# getfacl /srv/projecta
+
+透过这个 "针对目录设定的默认 ACL 权限设定值" 的项目，我们可以让这些属性继承到次目录底下，非常方便。那如果想要让 ACL 的属性全部消失，则通过 "setfacl -b 文档名"即可。
+
+
+使用者身份切换
+su: 可以进行任何身份的切换
+su [-lm] [-c 指令] [username]
+选项与参数：
+- ：单纯使用 - 如 "su - "代表使用login-shell 的变量文档读取方式来登入系统；若使用者名称没有加上去，则代表切换为 root 的身份。
+-l: 与 - 类似，但后面需要加欲切换的使用者账号。也是 login-shell 的方式
+-m: -m 与 -p 是一样的，表示"使用目前的环境设定，而不读取新使用者的配置文件"
+-c: 仅进行一次指令，所有 -c 后面可以加上指令
+
+su用法总结：
+1. 若要完整的切换到新使用者的环境，必须要使用 su - username 或 su -l username，才会连同 PATH/USER/MAIL 等变量都转成新用户的环境；
+2. 如果仅想要执行一次 root 的指令，可以利用 su - -c "指令串"的方式来处理；
+3. 使用 root 切换成为任何使用者时，并不需要输入新用户的密码；
+
+
+sudo: 
+并非所有人都能够执行 sudo ， 而是仅有规范到/etc/sudoers 内的用户才能够执行 sudo 这个指令
+sudo [-b] [-u 新使用者账号]
+选项与参数：
+-b: 将后续的指令放到背景中让系统自行执行，而不与目前的shell产生影响
+-u: 后面可以接欲切换的使用者，若无此项则代表切换身份为root
+
+范例1：
+sudo -u sshd touch /tmp/mysshd
+ll /tmp/mysshd
+
+范例2：
+sudo -u vbird1 sh -c "mkdir ~/vbird1/www;\
+>cd ~vbird1/www;\
+>echo 'This is index.html file' > index.html"
+(使用 sh -c 的方法来执行一连串的指令)
+
+sudo 的执行是这样的流程：
+1. 当用户执行 sudo 时，系统于 /etc/sudoers 文档中搜寻该使用者是否有执行 sudo 的权限；
+2. 若使用者具有可执行 sudo 的权限，便让使用者 输入用户自己的密码 来确认；
+3. 若密码输入成功，便开始进行 sudo 后续接的指令(但 root 执行 sudo 时，不需要输入密码)；
+4. 若欲切换的身份与执行者身份相同，那也不需要输入密码。
+
+visudo 与 /etc/sudoers
+1. 单一用户进行root所有指令
+假设要让 vbird1 这账号可以使用 root 的任何指令，可以简单的这样进行修改即可：
+[root@www ~]# visudo
+....(前面省略)....
+root ALL=(ALL) ALL <==找到这一行，大约在 76 行左右
+vbird1 ALL=(ALL) ALL <==这一行是你要新增的
+....(前面省略)....
+修改完存储后离开vi即可
+
+格式
+使用者账号 登入者的来源主机名=(可切换的身份) 可下达的指令
+   root            ALL=(ALL)                  ALL <==这是默认值
+
+2. 利用群组以及免密码的功能处理 visudo 
+范例：
+使pro1,pro2,pro3这三个用户能够通过群组的功能管理系统
+[root@www ~]# visudo <==同样的，使用 root 先设定
+....(前面省略)....
+%wheel ALL=(ALL) ALL <==大约在 84 行左右，
+# 在最左边加上 % ，代表后面接的是一个群组，改完请储存后离开
+[root@www ~]# usermod -a -G wheel pro1 <==将 pro1 加入 wheel 的支持
+[root@www ~]# usermod -a -G wheel pro2
+[root@www ~]# usermod -a -G wheel pro3
+(%wheel ALL=(ALL) NOPASSWD: ALL  : 免除密码输入的意思)
+
+3. 有限制的指令操作
+范例： 
+[root@www ~]# visudo <==注意是 root 身份
+myuser1 ALL=(root) !/usr/bin/passwd, /usr/bin/passwd [A-Za-z]*, !/usr/bin/passwd root
+(指令需要使用绝对路径；逗号分隔多个指令；!表示不可执行；)
+
+4. 透过别名设置 visudo:
+[root@www ~]# visudo <==注意是 root 身份
+User_Alias ADMPW = pro1, pro2, pro3, myuser1, myuser2
+Cmnd_Alias ADMPWCOM = !/usr/bin/passwd, /usr/bin/passwd [A-Za-z]*,!/usr/bin/passwd root
+ADMPW ALL=(root) ADMPWCOM
+
+5. sudo 的时间间隔问题
+两次执行 sudo 的间隔在五分钟内，那么再次执行 sudo 时就不需要再次输入密码，这是因为系统相信你在五分钟内不会离开你的作业，所以执行 sudo 的是同一个人。
+另外要注意的是，因为使用一般账号时，理讬上不会使用到 /sbin, /usr/sbin 等目录内的指令，所以 $PATH 变量不会含有这些目录，因此很多管理指令需要使用绝对路径来下达比较妥当。
+
+6. sudo 搭配 su 的使用方式
+范例：
+[root@www ~]# visudo
+User_Alias ADMINS = pro1, pro2, pro3, myuser1
+ADMINS ALL=(root) /bin/su -
+
+接下来，上述的 pro1, pro2, pro3, myuser1 这四个人，只要输入 sudo su - 并且输入 自己的密码 后，立刻变成 root 的身份。不但 root 密码不会外流，用户的管理也变得非常方便
+
+
+用户特殊的 shell 与 PAM 模块
+特殊的 shell, /sbin/nologin
+范例：
+当使用者尝试利用纯mail账号(例如 myuser3)时，利用 /etc/nologin.txt 告知用户不要利用该账号登入系统
+[root@www ~]# vi /etc/nologin.txt
+This account is system account or mail account.
+Please DO NOT use this account to login my Linux server.
+测试：
+[root@www ~]# su - myuser3
+This account is system account or mail account.
+Please DO NOT use this account to login my Linux server.
+[root@www ~]#
+
+
+PAM: (Pluggable Authentication Modules, 嵌入式模块)
+
+PAM模块设定语法
+PAM 藉由一个与程序相同文件名的配置文件来进行一连串的认证分析需求。我们同样以 passwd 这个指令的呼叫 PAM 来说明好了。当你执行 passwd 后，这支程序呼叫PAM的流程是：
+1. 用户开始执行 /usr/bin/passwd 这支程序，并输入密码；
+2. passwd 呼叫 PAM 模块进行验证；
+3. PAM 模块会到 /etc/pam.d/ 找寻与程序 (passwd) 同名的配置文件；
+4. 依据 /etc/pam.d/passwd 内的设定，引用相关的 PAM 模块逐步进行验证分析；
+5. 将验证结果 (成功、失败以及其他讯息) 回传给 passwd 这支程序；
+6. passwd 这支程序会根据 PAM 回传的结果决定下一个动作 (重新输入新密码或者通过验证)
+
+[root@www ~]# cat /etc/pam.d/passwd
+#%PAM-1.0 <==PAM 版本的说明
+auth include system-auth <==每一行都是一个验证的过程
+account include system-auth
+password include system-auth
+验证类别 控制标准 PAM模块与该模块的参数
+
+四种主要验证类别：
+auth(authentication)
+accout(authorization)
+session
+password 
+
+四种主要控制标准：
+required
+requisite
+sufficient
+optional
+
+详细的模块内容可以在系统中找到：
+/etc/pam.d/*：每个程序个别的 PAM 配置文件；
+/lib/security/*：PAM 模块文档的实际放置目录； /etc/security/*：其他 PAM 环境的配置文件；
+/usr/share/doc/pam-*/：详细的 PAM 说明文件。
+
+如果发生任何无法登入或者是产生一些你无法预期的错误时，由于 PAM 模块都会将数据记载在/var/log/secure当中，所以发生了问题请务必该文档内去查询一下问题点
+
+
+Linux主机上的用户讯息传递
+查询使用者：w,who,last,lastlog
+w / who: 查询目前已登入在系统上面的用户
+last / lastlog: 查询每个账号的最近登入时间
+
+使用者对谈：write,mesg,wall
+write 使用者账号 [用户所在终端接口]
+范例：
+[root@www ~]# who
+root pts/1 2009-03-04 11:04 (192.168.1.100)
+vbird1 pts/2 2009-03-04 13:15 (192.168.1.100) <==有看到 vbird1 在线
+[root@www ~]# write vbird1 pts/2
+Hello, there:
+Please don't do anything wrong... <==这两行是 root 写的信息
+# 结束时，请按下 [crtl]+d 来结束输入。此时在 vbird1的画面中，会出现：
+Message from root@www.vbird.tsai on pts/1 at 13:23 ...
+Hello, there:
+Please don't do anything wrong...
+EOF
+
+mesg n //不想接收任何讯息，但无法阻挡root发送的讯息
+mesg y  //恢复接收
+mesg    //查看目前的 mesg 状态
+
+wall: 对所有系统上面的用户传送简讯(广播)
+wall "I will shutdown my linux serive..."
+
+
+使用者邮件信箱：mail
+mail username@localhost -s "邮件标题"
+如果是寄给本机上的使用者，基本上连"@localhost"都不用写
+范例：
+[root@www ~]# mail vbird1 -s "nice to meet you"
+Hello, D.M. Tsai
+Nice to meet you in the network.
+You are so nice. byebye!
+. <==这里很重要，结束时，最后一行输入小数点 . 即可！
+Cc: <==这里是所谓的 "副本"，不需要寄给其他人，所以直接 [Enter]
+[root@www ~]# <==出现提示字符，表示输入完毕了！
+
+也可先编写好邮件filename，然后
+mail vbird1 -s "nice to meet you" < filename
+
+
+收信
+mail
+范例：
+[vbird1@www ~]$ mail
+Mail version 8.1 6/6/93. Type ? for help.
+"/var/spool/mail/vbird1": 1 message 1 new
+>N 1 root@www.vbird.tsai Wed Mar 4 13:36 18/663 "nice to meet
+you"
+& <==这里可以输入很多的指令，如果要查阅，输入 ? 即可。
+
+几个比较常见的指令：
+指令   意义
+h      列出信件标头；如果要查阅 40封信件左右的信件标头，可以输入 h 40
+d     删除除后续接的信件号码，删除单封是 d10 ，删除 20~40 封则为 d20-40。不过，这个动作要生效的话，必须要配合 q 这个指令才行(参考底下说明)
+s     将信件储存成文档。例如我要将第 5 封信件的内容存成 ~/mail.file: s 5 ~/mail.file
+x     或者输入 exit 都可以。这个是 "不作任何动作离开 mail 程序" 的意思。不论你刚刚删除了什么信件，或者读过什么，使用 exit 都会直接离开 mail，所以刚刚进行的删除与阅读工作都会无效。 如果您只是查阅一下邮件而已的话，一般来说，建议使用这个离开。
+q     相对于 exit 是不动作离开，q 则会进行两项动作： 1. 将刚刚删除的信件移出 mailbox之外； 2.将刚刚有阅读过的信件存入 ~/mbox ，且移出 mailbox 之外。
+
+/var/spool/mail/vbird1 为 vbird1 的 "新件匣"
+/home/vbird1/mbox 为"收件匣"
+读取 /home/vbird1/mbox:
+mail -f /home/vbird1/mbox
+
+
+一些检查工具
+pwk
+[root@www ~]# pwck
+pwck 这个指令在检查 /etc/passwd 这个账号配置文件内的信息，与实际的家目录是否存在等信息，还可以比对 /etc/passwd /etc/shadow 的信息是否一致，另外，如果 /etc/passwd 内的数据字段错误时，会提示使用者修订。 
+相对应的群组检查可以使用 grpck 这个指令。
+
+pwconv,使用 pwconv后，可以：
+1. 比对 /etc/passwd 及 /etc/shadow ，若 /etc/passwd 内存在的账号并没有对应的/etc/shadow 密码时，则 pwconv 会去 /etc/login.defs 取用相关的密码数据，并建立该账号的 /etc/shadow 数据；
+2. 若 /etc/passwd 内存在加密后的密码数据时，则 pwconv 会将该密码栏移动到 /etc/shadow内，并将原本的 /etc/passwd 内相对应的密码栏变成 x。
+(正常使用useradd 增加使用者时，使用pwconv并不会有任何的动作；如果手动设定账号，这个pwcov就很重要)
+
+pwunconv: 与 pwconv 相反
+pwunconv 将 /etc/shadow 内的密码栏数据写回 /etc/passwd 当中，并且删除 /etc/shadow 文档。
+(最好不要使用)
+
+
+chpasswd
+读入未加密前的密码，并且经过加密后，将加密后的密码写入 /etc/shadow 当中。这个指令常被使用在大量建置账号的情况，他可以有standard input 读入数据，每笔数据的格式是 "username:password"
+范例：
+echo "vbird1:abcd1234" | chpasswd -m   //-m 使用 MD5加密方法
+
+
+
+完全手动建立账号
+1. 先建立所需要的群组 ( vi /etc/group )；
+2. 将 /etc/group 与 /etc/gshadow 同步化 ( grpconv )；
+3. 建立账号的各个属性 ( vi /etc/passwd )；
+4. 将 /etc/passwd 与 /etc/shadow 同步化 ( pwconv )；
+5. 建立该账号的密码 ( passwd accountname )；
+6. 建立用户家目录 ( cp -a /etc/skel /home/accountname )；
+7. 更改用户家目录的属性 ( chown -R accountname.group /home/accountname )。
+
+范例：
+1. 建立群组 normalgroup ，假设 520 这个 GID 没有被使用！并且同步化gshadow
+[root@www ~]# vi /etc/group
+# 在最后一行加入底下这一行！
+normalgroup:x:520:
+[root@www ~]# grpconv
+[root@www ~]# grep 'normalgroup' /etc/group /etc/gshadow
+/etc/group:normalgroup:x:520:
+/etc/gshadow:normalgroup:x::
+# 最后确定 /etc/group, /etc/gshadow 都存在这个群组才行，搞定群组。
+2. 建立 normaluser 这个账号，假设 UID 700 没被使用
+[root@www ~]# vi /etc/passwd
+# 在最后一行加入底下这一行
+normaluser:x:700:520::/home/normaluser:/bin/bash
+3. 同步化密码，并且建立该用户的密码
+[root@www ~]# pwconv
+[root@www ~]# grep 'normaluser' /etc/passwd /etc/shadow
+/etc/passwd:normaluser:x:700:520::/home/normaluser:/bin/bash
+/etc/shadow:normaluser:x:14307:0:99999:7:::
+# 确定 /etc/passwd, /etc/shadow 都含有 normaluser 的信息了，但是密码还不对
+[root@www ~]# passwd normaluser
+Changing password for user normaluser.
+New UNIX password:
+Retype new UNIX password:
+passwd: all authentication tokens updated successfully.
+4. 建立用户家目录，并且修订权限
+[root@www ~]# cp -a /etc/skel /home/normaluser
+[root@www ~]# chown -R normaluser:normalgroup /home/normaluser
+[root@www ~]# chmod 700 /home/normaluser
+
+
+范例：大量建置账号模板
+[root@www ~]# vi account1.sh
+#!/bin/bash
+# 这支程序用来建立新增账号，功能有：
+# 1. 检查 account1.txt 是否存在，并将该文档内的账号取出；
+# 2. 建立上述文档的账号；
+# 3. 将上述账号的密码修订成为 "强制第一次进入需要修改密码" 的格式。
+# 2009/03/04 VBird
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+# 检查 account1.txt 是否存在
+if [ ! -f account1.txt ]; then
+echo "所需要的账号文档不存在，请建立 account1.txt ，每行一个账号名称"
+exit 1
+fi
+usernames=$(cat account1.txt)
+for username in $usernames
+do
+useradd $username <==新增账号
+echo $username | passwd --stdin $username <==不账号相同的密码
+chage -d 0 $username <==强刢登入修改密码
+done
+
+建立account1.txt 文档测试
+[root@www ~]# vi account1.txt
+std01
+std02
+std03
+std04
+std05
+std06
+std07
+std08
+std09
+std10
+[root@www ~]# sh account1.sh 
+
+
+范例2：大量建置账号(适用连续数字，如学号)
+#!/bin/bash
+#
+# 这支程序主要在帮您建立大量的账号之用，更多的使用方法请参考：
+#
+http://linux.vbird.org/linux_basic/0410accountmanager.php#manual_amount
+#
+# 本程序为鸟哥自行开发，在 CentOS 5.x 上使用没有问题，
+# 但不保证绝不会发生错误。使用时，请自行负担风险。
+#
+# History:
+# 2005/09/05 VBird 刚刚才写完，使用看看先～
+# 2009/03/04 VBird 加入一些语系的修改与说明，修改密码产生方式 (用 openssl)
+export LANG=zh_TW.big5
+export PATH=/sbin:/usr/sbin:/bin:/usr/bin
+accountfile="user.passwd"
+# 1. 进行账号相关的输入先
+echo ""
+echo "例如我们昆山四技的学号为： 4960c001 刡 4960c060 ，那举："
+echo "账号开头代码为 ：4"
+echo "账号层级或年级为 ：960c"
+echo "号码数字位数为(001~060)：3"
+echo "账号开始号码为 ：1"
+echo "账号数量为 ：60"
+echo ""
+read -p "账号开头代码 ( Input title name, ex> std )======> "
+username_start
+read -p "账号层级或年级 ( Input degree, ex> 1 or enter )=> "username_degree
+read -p "号码部分的数字位数 ( Input \# of digital )======> " nu_nu
+read -p "起始号码 ( Input start number, ex> 520 )========> " nu_start
+read -p "账号数量 ( Input amount of users, ex> 100 )=====> " nu_amount
+read -p "密码标准 1) 不账号相同 2)随机数自定义 ==============> " pwm
+if [ "$username_start" == "" ]; then
+	echo "没有输入开头的代码，不予你执行" ; exit 1
+fi
+# 判断数字系统
+testing0=$(echo $nu_nu | grep '[^0-9]' )
+testing1=$(echo $nu_amount | grep '[^0-9]' )
+testing2=$(echo $nu_start | grep '[^0-9]' )
+if [ "$testing0" != "" -o "$testing1" != "" -o "$testing2" != "" ]; then
+	echo "输入的号码不对！有非为数字的内容！" ; exit 1
+fi
+if [ "$pwm" != "1" ]; then
+	pwm="2"
+fi
+# 2. 开始输出账号不密码档案！
+[ -f "$accountfile" ] && mv $accountfile "$accountfile"$(date +%Y%m%d)  //如果存在账号文件，则将文件重命名为账号文件名+日期
+nu_end=$(($nu_start+$nu_amount-1))
+for (( i=$nu_start; i<=$nu_end; i++ ))
+do
+	nu_len=${#i}     #获取数值位数
+	if [ $nu_nu -lt $nu_len ]; then
+		echo "数值的位数($i->$nu_len)已经比你设定的位数($nu_nu)还大！"
+		echo "程序无法继续"
+		exit 1
+	fi
+	nu_diff=$(( $nu_nu - $nu_len ))
+	if [ "$nu_diff" != "0" ]; then
+		nu_nn=0000000000
+		nu_nn=${nu_nn:1:$nu_diff}   #对nu_nn从1位开始截取nu_diff位
+	fi
+	account=${username_start}${username_degree}${nu_nn}${i}
+	if [ "$pwm" == "1" ]; then
+		password="$account"
+	else
+		password=$(openssl rand -base64 6)   #用openssl 产生伪随机数
+	fi
+	echo "$account":"$password" | tee -a "$accountfile"    #重定向输出
+done
+# 3. 开始建立账号与密码
+cat "$accountfile" | cut -d':' -f1 | xargs -n 1 useradd -m  #xargs:参数代换，useradd -m account
+chpasswd < "$accountfile"   #添加 password 
+pwconv                      #将密码从 /etc/passwd 到 etc/shadow
+echo "OK！建立完成！"
+
+如果有需要建立同一班级具有同一群组的话，可以先使用 groupadd 建立群组后， 将该群组加入 "cat "$accountfile" | cut -d':' -f1 | xargs -n 1 useradd -m -g groupname" 那行
+
+
+如果仅是测试而已，想要将刚刚建立的使用者整个删除，则可以使用如下的脚本来进行删除
+
+[root@www ~]# vi delaccount2.sh
+#!/bin/bash
+usernames=$(cat user.passwd | cut -d ':' -f 1)
+for username in $usernames
+do
+	echo "userdel -r $username"
+	userdel -r $username
+done
+[root@www ~]# sh delaccount2.sh
+
+
