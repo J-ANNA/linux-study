@@ -1,0 +1,133 @@
+platform 设备驱动
+参考链接：http://blog.chinaunix.net/uid-25014876-id-111745.html
+		 http://blog.chinaunix.net/uid-7828352-id-3833188.html
+		 http://www.wowotech.net/linux_kenrel/platform_device.html
+
+platform总线
+一个现实的linux设备和驱动通常都需要挂接在一种总线上，比较常见的总线有USB、PCI总线等。但是，在嵌入式系统里面，SoC系统中集成的独立的外设控制器、挂接在SoC内存空间的外设却不依附与此类总线。基于这样的背景下，2.6内核加入了platform虚拟总线。platform机制将设备本身的资源注册进内核，由内核统一管理，在驱动程序使用这些资源时使用统一的接口，这样提高了程序的可移植性。
+
+如果简单的说，platform总线对加入到该总线的设备和驱动分别封装了两个结构体——platform_device和platform_driver。并且提供了对应的注册函数。
+
+数据结构：
+1. 用于抽象Platform设备的数据结构----“struct platform_device”：
+ /* include/linux/platform_device.h, line 22 */
+struct platform_device {
+        const char      *name;
+        int             id;
+        bool            id_auto; 
+        struct device   dev;
+        u32             num_resources;
+        struct resource *resource;
+ 
+        const struct platform_device_id *id_entry;
+        
+        /* MFD cell pointer */
+        struct mfd_cell *mfd_cell;
+ 
+        /* arch specific additions */
+        struct pdev_archdata    archdata;
+};
+
+2. 用于抽象Platform设备驱动的数据结构----“struct platform_driver”：
+ /* include/linux/platform_device.h, line 173 */
+struct platform_driver {
+        int (*probe)(struct platform_device *);
+        int (*remove)(struct platform_device *);
+        void (*shutdown)(struct platform_device *);
+        int (*suspend)(struct platform_device *, pm_message_t state);
+        int (*resume)(struct platform_device *);
+        struct device_driver driver;
+        const struct platform_device_id *id_table;
+};
+
+struct platform_driver结构和struct device_driver非常类似，无非就是提供probe、remove、suspend、resume等回调函数，这里不再细说。
+
+另外这里有一个id_table的指针，内核会在合适的时机检查device和device_driver的名字，如果匹配，则执行probe。其实除了名称之外，还有一些宽泛的匹配方式，例如这里提到的各种match table。
+
+
+
+Platform Device提供的API
+Platform Device主要提供设备的分配、注册等接口，供其它driver使用，具体包括：
+/* include/linux/platform_device.h */
+extern int platform_device_register(struct platform_device *);
+extern void platform_device_unregister(struct platform_device *);
+ 
+extern void arch_setup_pdev_archdata(struct platform_device *);
+extern struct resource *platform_get_resource(struct platform_device *,
+                                              unsigned int, unsigned int);
+extern int platform_get_irq(struct platform_device *, unsigned int);
+extern struct resource *platform_get_resource_byname(struct platform_device *,
+                                                     unsigned int,
+                                                     const char *);
+extern int platform_get_irq_byname(struct platform_device *, const char *);
+extern int platform_add_devices(struct platform_device **, int);
+ 
+extern struct platform_device *platform_device_register_full(
+                const struct platform_device_info *pdevinfo);
+ 
+static inline struct platform_device *platform_device_register_resndata(
+                struct device *parent, const char *name, int id,
+                const struct resource *res, unsigned int num,
+                const void *data, size_t size)
+ 
+static inline struct platform_device *platform_device_register_simple(
+                const char *name, int id,
+                const struct resource *res, unsigned int num)
+ 
+static inline struct platform_device *platform_device_register_data(
+                struct device *parent, const char *name, int id,
+                const void *data, size_t size)
+ 
+extern struct platform_device *platform_device_alloc(const char *name, int id);
+extern int platform_device_add_resources(struct platform_device *pdev,
+                                         const struct resource *res,
+                                         unsigned int num);
+extern int platform_device_add_data(struct platform_device *pdev,
+                                    const void *data, size_t size);
+extern int platform_device_add(struct platform_device *pdev);
+extern void platform_device_del(struct platform_device *pdev);
+extern void platform_device_put(struct platform_device *pdev);
+
+ 
+ Platform Driver提供的API
+ /* include/linux/platform_device.h */
+ 
+extern int platform_driver_register(struct platform_driver *);
+extern void platform_driver_unregister(struct platform_driver *);
+ 
+/* non-hotpluggable platform devices may use this so that probe() and
+ * its support may live in __init sections, conserving runtime memory.
+ */
+extern int platform_driver_probe(struct platform_driver *driver,
+                int (*probe)(struct platform_device *));
+ 
+static inline void *platform_get_drvdata(const struct platform_device *pdev)
+ 
+static inline void platform_set_drvdata(struct platform_device *pdev,
+                                        void *data)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

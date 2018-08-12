@@ -1,0 +1,295 @@
+在Linux操作系统下有3类主要的设备文件类型：块设备、字符设备和网络设备。这种分类方法可以将控制输入/输出设备的驱动程序与其他操作系统软件分离开来。字符设备是指存取时没有缓存的设备。典型的字符设备包括鼠标、键盘、串行口等。
+字符设备与块设备的主要区别是：在对字符设备发出读/写请求时，实际的硬件I/O一般紧接着发生。块设备则不然，它利用一块系统内存作为缓冲区，若用户进程对设备的请求能满足用户的要求，就返回请求的数据；否则，就调用请求函数来进行实际的I/O操作。块设备主要是针对磁盘等慢速设备设计的，以免耗费过多的CPU时间用来等待。网络设备可以通过BSD套接口访问数据。
+
+
+字符设备驱动完成的主要工作是初始化、添加和删除 strcut cdev结构体，申请和释放设备号，以及填充 struct file_operations 结构体中断的操作函数，实现结构体中的read()、write()和ioctl()等函数。
+
+
+Linux内核中，使用 struct cdev 来描述一个字符设备
+<include/linux/cdev.h>  
+
+struct cdev {   
+　　struct kobject kobj;                  //内嵌的内核对象.  
+　　struct module *owner;                 //该字符设备所在的内核模块（所有者）的对象指针，一般为THIS_MODULE主要用于模块计数  
+　　const struct file_operations *ops;    //该结构描述了字符设备所能实现的操作集（打开、关闭、读/写、...），是极为关键的一个结构体
+　　struct list_head list;                //用来将已经向内核注册的所有字符设备形成链表
+　　dev_t dev;                            //字符设备的设备号，由主设备号和次设备号构成（如果是一次申请多个设备号，此设备号为第一个）
+　　unsigned int count;                   //隶属于同一主设备号的次设备号的个数
+　　...
+};
+
+
+
+对于struct cdev内核提供了一些操作接口
+ 头文件linux/cdev.h
+
+ 1) 动态申请（构造）cdev内存（设备对象）
+struct cdev *cdev_alloc(void);　　
+/* 返回值：
+　　　　成功 cdev 对象首地址
+　　　　失败：NULL */
+
+2) 初始化cdev的成员，并建立cdev和file_operations之间关联起来
+void cdev_init(struct cdev *p, const struct file_operations *fops);　　
+/* 参数：
+　　　　struct cdev *p - 被初始化的 cdev对象
+　　　　const struct file_operations *fops - 字符设备操作方法集 */
+
+3) 注册cdev设备对象（添加到系统字符设备列表中）
+int cdev_add(struct cdev *p, dev_t dev, unsigned count);
+/* 参数：
+　　　　struct cdev *p - 被注册的cdev对象
+　　　　dev_t dev - 设备的第一个设备号
+　　　　unsigned - 这个设备连续的次设备号数量
+   返回值：
+　　　　成功：0
+　　　　失败：负数（绝对值是错误码）*/
+
+4) 将cdev对象从系统中移除（注销 ）
+void cdev_del(struct cdev *p);
+/*参数：　
+　　　　struct cdev *p - 要移除的cdev对象 */
+
+5)释放cdev内存
+void cdev_put(struct cdev *p);
+/*参数：
+　　　　struct cdev *p - 要移除的cdev对象 */
+
+
+
+设备号申请/释放
+一个字符设备或块设备都有一个主设备号和一个此设备号。主设备号用来标识与设备文件相连的驱动程序，用来反映设备类型。次设备号被驱动程序用来辨别操作的是哪个设备，用来区分同类型的设备。
+
+设备号用dev_t来描述：
+typedef u_long dev_t;  //在32位机中是4个字节，高12位表示主设备号，低20位表示次设备号
+内核也为我们提供了几个方便操作的宏实现dev_t：
+#define MAJOR(dev)    ((unsigned int) ((dev) >> MINORBITS))　　// 从设备号中提取主设备号
+#define MINOR(dev)    ((unsigned int) ((dev) & MINORMASK))　　// 从设备号中提取次设备号
+#define MKDEV(ma,mi)    (((ma) << MINORBITS) | (mi))</span>　　// 将主、次设备号拼凑为设备号
+/* 只是拼凑设备号,并未注册到系统中，若要使用需要竞态申请 */
+
+头文件 linux/fs.h
+1) 静态申请设备号
+int register_chrdev_region(dev_t from, unsigned count, const char *name);
+/* 参数：
+　　　　dev_t from - 要申请的设备号（起始）
+　　　　unsigned count - 要申请的设备号数量
+　　　　const char *name - 设备名
+   返回值：
+　　　　成功：0
+　　　　失败：负数（绝对值是错误码）*/
+
+2) 动态分配设备号
+int alloc_chrdev_region(dev_t *dev, unsigned baseminor, unsigned count, const char *name);
+/* 参数：
+　　　　dev_t *dev - 用于保存分配到的第一个设备号（起始）
+　　　　unsigned baseminor - 起始次设备号
+　　　　unsigned count - 要分配设备号的数量
+　　　　const char *name - 设备名
+   返回值：
+　　　　成功：0
+　　　　失败：负数（绝对值是错误码）*/
+
+3) 释放设备号
+void unregister_chrdev_region(dev_t from, unsigned count);
+/* 参数：
+　　　　dev_t from - 要释放的第一个设备号（起始）
+　　　　unsigned count - 要释放的次设备号数量 */
+
+4)创建设备文件：
+利用cat /proc/devices查看申请到的设备名，设备号。
+	1. 使用mknod手工创建：mknod filename type major minor
+	2. 自动创建设备节点:利用udev（mdev）来实现设备文件的自动创建，首先应保证支持udev（mdev），由busybox配置。在驱动初始化代码里调用class_create为该设备创建一个class，再为每个设备调用device_create创建对应的设备。
+
+
+struct cdev 中的 file_operations *fops成员
+Linux下一切皆是“文件”，字符设备也是这样，file_operations结构体中的成员函数是字符设备程序设计的主题内容，这些函数实际会在用户层程序进行Linux的open()、close()、write()、read()等系统调用时最终被调用。
+
+标准化：如果做到极致，应用层仅仅需要一套系统调用接口函数。
+
+"文件"的操作接口结构：
+struct file_operations {
+　　struct module *owner;　　
+　　　　/* 模块拥有者，一般为 THIS——MODULE */
+　　ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);　　
+　　　　/* 从设备中读取数据，成功时返回读取的字节数，出错返回负值（绝对值是错误码） */
+　　ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);　　　
+　　　　/* 向设备发送数据，成功时该函数返回写入字节数。若为被实现，用户调层用write()时系统将返回 -EINVAL*/
+　　int (*mmap) (struct file *, struct vm_area_struct *);　　
+　　　　/* 将设备内存映射内核空间进程内存中，若未实现，用户层调用 mmap()系统将返回 -ENODEV */
+　　long (*unlocked_ioctl)(struct file *filp, unsigned int cmd, unsigned long arg);　　
+　　　　/* 提供设备相关控制命令（读写设备参数、状态，控制设备进行读写...）的实现，当调用成功时返回一个非负值 */
+　　int (*open) (struct inode *, struct file *);　　
+　　　　/* 打开设备 */
+　　int (*release) (struct inode *, struct file *);　　
+　　　　/* 关闭设备 */
+　　int (*flush) (struct file *, fl_owner_t id);　　
+　　　　/* 刷新设备 */
+　　loff_t (*llseek) (struct file *, loff_t, int);　　
+　　　　/* 用来修改文件读写位置，并将新位置返回，出错时返回一个负值 */
+　　int (*fasync) (int, struct file *, int);　　
+　　　　/* 通知设备 FASYNC 标志发生变化 */
+　　unsigned int (*poll) (struct file *, struct poll_table_struct *);　　
+　　　　/* POLL机制，用于询问设备是否可以被非阻塞地立即读写。当询问的条件未被触发时，用户空间进行select()和poll()系统调用将引起进程阻塞 */
+　　...
+};
+
+
+
+
+
+范例：
+#cdev_module.c  file
+
+
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/cdev.h>
+#include <linux/fs.h>
+#include <linux/errno.h>
+#include <asm/current.h>
+#include <linux/sched.h>
+MODULE_LICENSE("GPL");
+static int major = 0;
+static int minor = 0;
+const int count = 3;
+#define DEVNAME "demo"
+static struct cdev *demop = NULL;
+//打开设备
+static int demo_open(struct inode *inode, struct file *filp)
+{
+	//get command and pid
+	printk(KERN_INFO "(%s:pid=%d),%s : %s : %d\n", current->comm, current->pid, __FILE__, __func__, __LINE__);
+	//get major and minor from inode
+	printk(KERN_INFO "(major=%d,minor=%d), %s : %s ：%d\n",imajor(inode), iminor(inode), __FILE__, __func__, __LINE__);
+	return 0;
+}
+
+//关闭设备
+static int demo_release(struct inode *inode, struct file *filp)
+{
+	//get command and pid
+	printk(KERN_INFO "(%s:pid=%d), %s : %s : %d\n", current->comm, current->pid, __FILE__, __func__, __LINE__);
+	//get major and minor from inode
+	printk(KERN_INFO "(major=%d, minor=%d), %s : %s : %d\n", imajor(inode), iminor(inode), __FILE__, __func__, __LINE__);
+	return 0;
+}
+
+
+//读设备
+static ssize_t demo_read(struct file *filp, char __user *buf, size_t size, loff_t *offset)
+{
+	struct inode *inode = filp->f_path.dentry->d_inode;
+	//get command and pid
+	printk(KERN_INFO "(%s:pid=%d), %s : %s : %d\n", current->comm, current->pid, __FILE__, __func__, __LINE__);
+	//get major and minor from inode
+	printk(KERN_INFO "(major=%d,minor=%d), %s : %s : %d\n", imajor(inode), iminor(inode), __FILE__, __func__, __LINE__);
+	return 0;
+}
+
+//写设备
+static ssize_t demo_write(struct file *filp, const char __user *buf, size_t size, loff_t *offset)
+{
+	struct inode *inode = filp->f_path.dentry->d_inode;
+	//get command and pid
+	printk(KERN_INFO "(%s:pid=%d), %s : %s : %d\n", current->comm, current->pid, __FILE__, __func__, __LINE__);
+	//get major and minor from inode
+	printk(KERN_INFO "(major=%d, minor=%d), %s : %s : %d\n", imajor(inode), iminor(inode), __FILE__, __func__,__LINE__);
+	return 0;
+}
+
+//操作方法集
+static struct file_operations fops = {
+	.owner = THIS_MODULE, 
+	.open = demo_open,
+	.release = demo_release,
+	.read = demo_read,
+	.write = demo_write,
+};
+
+//cdev设备模块初始化
+static int __init demo_init(void)
+{
+	dev_t devnum; 
+	int ret;
+	//get command and pid
+	printk(KERN_INFO "(%s:pid=%d), %s : %s : %d\n", current->comm, current->pid, __FILE__, __func__, __LINE__);
+	//1. alloc cdev obj
+	demop = cdev_alloc();
+	if(NULL == demop) {
+		return -ENOMEM;
+	}
+	//2. init cdev obj
+	cdev_init(demop, &fops);
+	ret = alloc_chrdev_region(&devnum, minor, count, DEVNAME);
+	if(ret){
+		goto ERR_STEP;	
+	}
+
+	major = MAJOR(devnum);
+	//3. register cdev obj
+	ret = cdev_add(demop, devnum, count);
+	if(ret){
+		goto ERR_STEP1;
+	}
+	//get command and pid
+	printk(KERN_INFO "(%s:pid=%d), %s : %s : %d - ok.\n", current->comm, current->pid, __FILE__, __func__,__LINE__);
+	return 0;
+	
+ERR_STEP1:
+	unregister_chrdev_region(devnum, count);
+
+ERR_STEP:
+	cdev_del(demop);
+	//get command and pid
+	printk(KERN_INFO "(%s:pid=%d), %s : %s : %d - fail.\n", current->comm, current->pid, __FILE__, __func__,__LINE__);
+	return ret;
+}
+
+
+static void __exit demo_exit(void)
+{
+	//get command and pid
+	printk(KERN_INFO "(%s:pid=%d), %s : %s : %d - leave.\n", current->comm, current->pid, __FILE__, __func__,__LINE__);
+	unregister_chrdev_region(MKDEV(major, minor), count);
+	cdev_del(demop);
+}
+
+module_init(demo_init);
+module_exit(demo_exit);
+
+
+
+#Makefile file
+obj-m:=target.o       #:= 即时赋值； = 延时赋值。在这两者都可
+target-objs:=cdev_module.o
+
+
+#obj-m = cdev_module.o
+
+KERNELDIR:=/lib/modules/$(shell uname -r)/build
+#KERNELDIR:=/home/qsj/work/linux-imx
+PWD:=$(shell pwd)
+
+modules:
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
+
+clean:
+	rm -rf .tmp_versions Module.symvers modules.order .tmp_versions .*.cmd *.o *.ko *.modc *.out
+
+
+
+
+
+如果需要安装，直接insmod xxx.ko即可，输入dmesg | tail 可以看到打印的内容，输入lsmod | grep hello也可以看一下模块是否已经安装；
+
+如果删除模块，直接输入rmmod xxx即可，当然添加和删除的操作都需要在root模式下进行操作
+
+
+
+
+
+
+
+

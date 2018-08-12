@@ -1,0 +1,155 @@
+ioremap() 函数解析
+参考链接：
+https://blog.csdn.net/zqixiao_09/article/details/50859505
+https://www.linuxidc.com/Linux/2011-04/34295.htm
+
+
+
+ioremap()函数基本概念
+ 几乎每一种外设都是通过读写设备上的寄存器来进行的，通常包括控制寄存器、状态寄存器和数据寄存器三大类，外设的寄存器通常被连续地编址。根据CPU体系结构的不同，CPU对IO端口的编址方式有两种：
+a -- I/O 映射方式（I/O-mapped）
+       典型地，如X86处理器为外设专门实现了一个单独的地址空间，称为"I/O地址空间"或者"I/O端口空间"，CPU通过专门的I/O指令（如X86的IN和OUT指令）来访问这一空间中的地址单元。
+
+b -- 内存映射方式（Memory-mapped）
+　 RISC指令系统的CPU（如ARM、PowerPC等）通常只实现一个物理地址空间，外设I/O端口成为内存的一部分。此时，CPU可以象访问一个内存单元那样访问外设I/O端口，而不需要设立专门的外设I/O指令。
+
+但是，这两者在硬件实现上的差异对于软件来说是完全透明的，驱动程序开发人员可以将内存映射方式的I/O 端口和外设内存统一看作是"I/O内存"资源。
+
+一般来说，在系统运行时，外设的I/O 内存资源的物理地址是已知的，由硬件的设计决定。 但是CPU通常并没有为这些已知的外设I/O 内存资源的物理地址预定义虚拟地址范围，驱动程序并不能直接通过物理地址访问 I/O内存资源，而必须将它们映射到核心虚地址空间内（通过页表），然后才能根据映射所得到的核心虚地址范围，通过访内指令访问这些I/O内存资源。
+
+
+ Linux在io.h头文件中声明了函数ioremap（），用来将I/O 内存资源的物理地址映射到核心虚地址空间（3GB－4GB）中（这里是内核空间），原型如下：
+
+1、ioremap函数
+
+ioremap宏定义在asm/io.h内：
+
+#define ioremap(cookie,size)           __ioremap(cookie,size,0)
+
+__ioremap函数原型为(arm/mm/ioremap.c)：
+void __iomem * __ioremap(unsigned long phys_addr, size_t size, unsigned long flags);
+参数：
+phys_addr：要映射的起始的IO地址
+size：要映射的空间的大小
+flags：要映射的IO空间和权限有关的标志
+该函数返回映射后的内核虚拟地址(3G-4G). 接着便可以通过读写该返回的内核虚拟地址去访问之这段I/O内存资源。
+
+2、iounmap函数
+
+iounmap函数用于取消ioremap（）所做的映射，原型如下：
+void iounmap(void * addr);
+
+二、 ioremap() 相关函数解析
+在将I/O内存资源的物理地址映射成核心虚地址后，理论上讲我们就可以象读写RAM那样直接读写I/O 内存资源了。为了保证驱动程序的跨平台的可移植性，我们应该使用Linux中特定的函数来访问I/O 内存资源，而不应该通过指向核心虚地址的指针来访问。
+
+
+读写I/O的函数如下所示：
+a -- writel()
+    writel()往内存映射的 I/O 空间上写数据，wirtel()  I/O 上写入 32 位数据 (4字节)。
+原型：void writel (unsigned char data , unsigned short addr )
+
+b -- readl()
+    readl() 从内存映射的 I/O 空间上读数据,readl 从 I/O 读取 32 位数据 ( 4 字节 )。 
+原型：unsigned char readl (unsigned int addr )
+变量    addr  是 I/O 地址。
+返回值 ： 从 I/O 空间读取的数值。
+
+具体定义如下：
+#define readb __raw_readb
+#define readw(addr) __le16_to_cpu(__raw_readw(addr))
+#define readl(addr) __le32_to_cpu(__raw_readl(addr))
+#ifndef __raw_readb
+static inline u8 __raw_readb(const volatile void __iomem *addr)
+{
+    return *(const volatile u8 __force *) addr;
+}
+#endif
+ 
+#ifndef __raw_readw
+static inline u16 __raw_readw(const volatile void __iomem *addr)
+{
+    return *(const volatile u16 __force *) addr;
+}
+#endif
+ 
+#ifndef __raw_readl
+static inline u32 __raw_readl(const volatile void __iomem *addr)
+{
+    return *(const volatile u32 __force *) addr;
+}
+#endif
+ 
+#define writeb __raw_writeb
+#define writew(b,addr) __raw_writew(__cpu_to_le16(b),addr)
+#define writel(b,addr) __raw_writel(__cpu_to_le32(b),addr)
+
+
+#ifndef __arch_ioremap
+#define ioremap(cookie,size)            __arm_ioremap(cookie, size, MT_DEVICE)
+#define ioremap_nocache(cookie,size)    __arm_ioremap(cookie, size, MT_DEVICE)
+#define ioremap_cached(cookie,size)     __arm_ioremap(cookie, size, MT_DEVICE_CACHED)
+#define ioremap_wc(cookie,size)         __arm_ioremap(cookie, size, MT_DEVICE_WC)
+#define iounmap(cookie)                 __iounmap(cookie)
+#else
+#define ioremap(cookie,size)            __arch_ioremap((cookie), (size), MT_DEVICE)
+#define ioremap_nocache(cookie,size)    __arch_ioremap((cookie), (size), MT_DEVICE)
+#define ioremap_cached(cookie,size)     __arch_ioremap((cookie), (size), MT_DEVICE_CACHED)
+#define ioremap_wc(cookie,size)         __arch_ioremap((cookie), (size), MT_DEVICE_WC)
+#define iounmap(cookie)                 __arch_iounmap(cookie)
+#endif
+
+
+之前的32位系统中，无论是对内存还是寄存器，映射统一使用的是ioremap_nocache这个接口，但是在64位系统中，就要做区分了，因为使用ioremap_nocache做映射的地址在64位系统中使用memcpy操作时会发生对齐错误导致kernel panic，
+因此，如果在64位系统中，我们要对一个映射后的虚拟地址做memcpy操作，就要使用ioremap_wc来做映射。这两个映射接口的定义在arch/arm64/include/asm/io.h中。
+
+
+
+
+
+使用实例
+1. 先定义了一些寄存器，这里使用的地址均是物理地址：
+#define GPD0CON       0x114000a0  
+#define TIMER_BASE    0x139D0000             
+#define TCFG0         0x0000                 
+#define TCFG1         0x0004                              
+#define TCON          0x0008               
+#define TCNTB0        0x000C            
+#define TCMPB0        0x0010
+
+2. 为了使用内存映射，我们需先定义指针用来保存内存映射后的地址：
+static unsigned int *gpd0con;  
+static void *timer_base;  
+（注意：这里timer_base 指针指向的类型设为 void, 主要因为上面使用了地址偏移，使用void 更有利于我们使用）
+
+
+3. 使用ioremap() 函数进行内存映射，并将映射的地址赋给我们刚才定义的指针
+gpd0con = ioremap(GPD0CON,4);  
+timer_base = ioremap(TIMER_BASE,0x14);
+
+4. 得到地址后，可以调用 writel() 、readl() 函数进行相应的操作
+writel ((readl(gpd0con)&~(0xf<<0)) | (0x2<<0),gpd0con);  
+writel ((readl(timer_base +TCFG0  )&~(0xff<<0)) | (0xff <<0),timer_base +TCFG0);   
+writel ((readl(timer_base +TCFG1 )&~(0xf<<0)) | (0x2 <<0),timer_base +TCFG1 );   
+  
+writel (500, timer_base +TCNTB0  );  
+writel (250, timer_base +TCMPB0 );  
+writel ((readl(timer_base +TCON )&~(0xf<<0)) | (0x2 <<0),timer_base +TCON );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

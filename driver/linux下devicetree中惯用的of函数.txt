@@ -1,0 +1,13 @@
+linux下devicetree中惯用的of函数
+
+参考链接：https://blog.csdn.net/xishuang_gongzi/article/details/51495967
+
+
+
+
+
+
+
+
+
+

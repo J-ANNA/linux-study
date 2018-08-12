@@ -343,20 +343,78 @@ git pull username@ipaddr:远端repository名远端分支名 本地分支名。�
 
 参考链接：http://blog.csdn.net/lp542718520/article/details/52278939
 
+git patch 和patch以及git diff 命令
+参考链接：https://www.cnblogs.com/zndxall/p/8093455.html
+
+1.git log 查看commit id，修改前为id1，修改后id2
+
+2.根据id1到id2有几次提交来生成几个patch，否则的话会根据所有节点生成很多patch
+
+比如：
+
+commit id2
+
+commit idx
+
+commit id1
+
+那么执行：git format-patch -2 id1 id2   会按照顺序生成两个patch,比如下：
+
+0001-add-build-scripts.patch
+
+0002-add-test-build-scripts.patch
+
+其他用法：
+     git format-patch HEAD^^  有几个^就会打几个patch，从最近一次打起
+     git format-patch -1   打最新的一個包
+
+
+3.先回退到id1 : git reset --hard id1
+
+4.打patch时检查patch:
+
+先检查patch文件：git apply --stat  patchname.patch
+检查能否应用成功：git apply --check patchname.patch    (如果打不上，在这一步会报错，报错显示和git am patch是一样的,如果patch有顺序的话，检查第一个就可以)
+
+5.打patch :git am patchname.patch
+
+打patch时严格按照patch的顺序一个一个打
+
+6.patch失败的话，采用 patch -pn < patchname.patch
+
+pn表示跳过多少级目录，如果patch在当前目录下，直接用patch -pn < patchname.patch ,如果patch在上层目录下，则patch -p1 < ../patchname.patch
+
+7.git diff 也可以打patch，使用：
+
+　　git diff commit_id1 commit_id2 > test.patch
+
+　　打补丁: git apply test.patch
+
+备注，如果打补丁失败，要先把新增的文件删掉。
+
+
+git add -u <==> git add –update 
+提交所有被删除和修改的文件到数据暂存区
+
+git add . 
+提交所有修改的和新建的数据暂存区
+
+git add -A <==>git add –all 
+提交所有被删除、被替换、被修改和新增的文件到数据暂存区
+
+git commit --amend
+添加/修改 commit 信息
+
+git commit -s
+添加署名信息
 
 
 
+git切换到别的分支,要暂时保存当前分支的修改(不想进行add 和commit)的方法 git stash
 
 
-
-
-
-
-
-
-
-
-
+git reflog
+查看最近log信息
 
 
 

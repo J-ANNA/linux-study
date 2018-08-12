@@ -1,0 +1,55 @@
+Linux 设备驱动--- 内核等待队列 --- wait_queue_head --- wait_event_interruptible
+
+参考链接：https://blog.csdn.net/luoqindong/article/details/17840095
+		 https://blog.csdn.net/yikai2009/article/details/8653578
+
+
+等待队列：
+等待队列在linux内核中有着举足轻重的作用，很多linux驱动都或多或少涉及到了等待队列。因此，对于linux内核及驱动开发者来说，掌握等待队列是必须课之一。 Linux内核的等待队列是以双循环链表为基础数据结构，与进程调度机制紧密结合，能够用于实现核心的异步事件通知机制。它有两种数据结构：等待队列头（wait_queue_head_t）和等待队列项（wait_queue_t）。等待队列头和等待队列项中都包含一个list_head类型的域作为”连接件”。它通过一个双链表和把等待task的头，和等待的进程列表链接起来。下面具体介绍。
+
+
+
+定义：
+头文件：/include/linux/wait.h
+struct __wait_queue_head {
+  spinlock_t lock;
+  struct list_head task_list;
+};
+typedef struct __wait_queue_head wait_queue_head_t;
+参数：
+spinlock_t lock：在对task_list与操作的过程中，使用该锁实现对等待队列的互斥访问。
+srtuct list_head_t task_list： 双向循环链表，存放等待的进程。
+
+
+
+操作：
+1. 定义并初始化
+	(1)
+		wait_queue_head_t my_queue;
+		init_waitqueue_head(&my_queue);
+		直接定义并初始化。init_waitqueue_head()函数会将自旋锁初始化为未锁，等待队列初始化为空的双向循环链表。
+	(2)
+		DECLARE_WAIT_QUEUE_HEAD(my_queue);
+		定义并初始化，相当于(1)。
+
+	(3) 定义等待队列
+		DECLARE_WAITQUEUE(name,tsk);
+		注意此处是定义一个wait_queue_t类型的变量name，并将其private与设置为tsk。wait_queue_t类型定义如下：
+		typedef struct __wait_queue wait_queue_t;
+		struct __wait_queue {
+		   unsigned int flags;
+		#define WQ_FLAG_EXCLUSIVE   0x01
+		   void *private;
+		   wait_queue_func_t func;
+		   struct list_head task_list;
+		};
+
+
+
+
+
+
+
+
+
+

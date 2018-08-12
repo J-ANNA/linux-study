@@ -1,0 +1,55 @@
+request_firmware
+
+参考链接： https://blog.csdn.net/magod/article/details/6049558
+
+
+内核固件接口
+#include <linux/firmware.h>
+
+int request_firmware(const struct firmware **fw, char *name, 
+ struct device *device); 
+
+调用 request_firmware 要求用户空间定位并提供一个固件映象给内核. name 应当标识需要的固件; 正常的用法是供应者提供的固件文件名. 某些象 my_firmware.bin 的名子是典型的. 如果固件被成功加载, 返回值是 0(负责常用的错误码被返回), 并且 fw 参数指向一个这些结构:
+
+struct firmware {
+ size_t size;
+ u8 *data; 
+}; 
+那个结构包含实际的固件, 它现在可被下载到设备中. 小心这个固件是来自用户空间的未被检查的数据; 你应当在发送它到硬件之前运用任何并且所有的你能够想到的检查来说服你自己它是正确的固件映象. 设备固件常常包含标识串, 校验和, 等等; 在信任数据前全部检查它们.
+
+
+在你已经发送固件到设备前, 你应当释放 in-kernel 结构, 使用:
+void release_firmware(struct firmware *fw);
+
+
+因为 request_firmware 请求用户空间来帮忙, 它保证在返回前睡眠. 如果你的驱动当它必须请求固件时不在睡眠的位置, 异步的替代方法可能要使用:
+int request_firmware_nowait(struct module *module,
+	char *name, struct device *device, void *context,
+	void (*cont)(const struct firmware *fw, void *context));
+
+这里额外的参数是 moudle( 它将一直是 THIS_MODULE), context (一个固件子系统不使用的私有数据指针), 和 cont. 如果都进行顺利, request_firmware_nowait 开始固件加载过程并且返回 0. 在将来某个时间, cont 将用加载的结果被调用. 如果由于某些原因固件加载失败, fw 是 NULL.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

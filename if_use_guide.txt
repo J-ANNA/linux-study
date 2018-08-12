@@ -1,4 +1,4 @@
-文件表达式
+:文件表达式
 -e filename 如果 filename存在，则为真
 -d filename 如果 filename为目录，则为真 
 -f filename 如果 filename为常规文件，则为真
@@ -41,3 +41,6 @@ if [ 表达式1  –a  表达式2 ]
 
     逻辑或 -o                   条件表达式的或
 if [ 表达式1  –o 表达式2 ]
+
+
+

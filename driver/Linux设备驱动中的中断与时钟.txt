@@ -1,0 +1,59 @@
+Linux设备驱动中的中断与时钟
+
+参考链接：https://blog.csdn.net/z1106609486/article/details/51461072
+
+
+申请irq:
+int request_irq(unsigned int irq, irq_handler_t handler, unsigned long flags, const char *name, void *dev);
+参数 
+	irq：申请的硬件中断号
+	handler：向系统登记的中断处理函数，是一个回调函数
+	irqflags：中断处理属性 
+		中断触发方式 
+			IRQ_TRIGGER_RISING
+			IRQF_TRIGGER_FALLING
+			IRQF_TRIGGER_HIGH
+			IRQF_TRIGGER_LOW
+	中断处理方式 
+	IRQF_shared：多个设备共享中断
+	dev：传递给中断服务程序的私有数据，一般为设备结构体或者NULL
+	返回值 
+	成功：返回0
+	失败： 
+	返回-EINVAL：中断号无效或者中断处理函数为NULL
+	返回-EBUSY：中断已经被占用且不能共享
+
+
+devm_request_irq()函数 
+与request_irq()函数区别：devm_开头的API申请的是内核“managed”的资源，一般不需要在出错的地方处理和在remove()接口里面在显示的释放
+int devm_irq_irq(struct devcice* dev, unsigned int irq, irq_handler_t handler, unsigned long irqflags, const char *devname, void *dev_id);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,69 @@
+C语言中函数strcpy ,strncpy ,strlcpy的用法
+参考链接：https://blog.csdn.net/tigerjibo/article/details/6412759
+
+1. strcpy
+
+strcpy 是依据 /0 作为结束判断的，如果 to 的空间不够，则会引起 buffer overflow。strcpy 常规的实现代码如下（来自 OpenBSD 3.9）：
+char * strcpy(char *to, const char *from)
+{
+   char *save = to;
+
+
+   for (; (*to = *from) != '/0'; ++from, ++to);
+   return(save);
+}
+
+
+2. strncpy
+在 ANSI C 中，strcpy 的安全版本是 strncpy
+char *strncpy(char *s1, const char *s2, size_t n);
+strncpy 的标准用法为：（手工写上 /0）
+strncpy(path, src, sizeof(path) - 1);
+path[sizeof(path) - 1] = '/0';
+len = strlen(path);
+
+3. strlcpy
+而使用 strlcpy，就不需要我们去手动负责 /0 了，仅需要把 sizeof(dst) 告之 strlcpy 即可：
+strlcpy(path, src, sizeof(path));
+len = strlen(path);
+if ( len >= sizeof(path) )
+   printf("src is truncated.");
+
+并且 strlcpy 传回的是 strlen(str)，因此我们也很方便的可以判断数据是否被截断。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,179 @@
+The videobuf2 API
+
+参考链接：https://blog.csdn.net/paul_liao/article/details/8986999
+		 http://lwn.net/Articles/447435/
+
+Video4linux2驱动主要负责从sensor(通常是通过DMA)上获取视频数据然后把这些视频帧传输到用户空间，大量数据的传输是性能要考虑。出于此目的，V4L2定义了复杂的API去处理流数据。V4L2子系统为实现这些API也加入了不少复杂的代码，当然大部分的代码沿用了V4L。为了使驱动工程师更方便实现视频驱动代码，videobuf子系统提供了一组用于管理流IO buffer的接口。
+Linux kernel在不断的更新和完善，videobuf在2009已经被videobuf2取代，相比videobuf，videobuf2更加完善，更加实用。
+
+Buffers：
+像原来的的videobuf一样，videobuf2也实现了三种buffer类型。Vmalloc buffer这类buffer由vmalloc()分配，因此在内核空间虚拟地址上是连续的，drivers working with these buffers almost invariably end up copyingthe data once as it passes through the system；contiguous DMA buffers在物理内存上连续，通常硬件设备需要在连续物理地址空间上执行DMA操作；S/G DMA buffers在物理内存上是不连续的，如果硬件上支持scatter/gather DMA，驱动可以使用这种方式。
+
+驱动程序使用不同的类型buffer，需要包含以下对应的头文件：
+
+#include <media/videobuf2-vmalloc.h>
+#include <media/videobuf2-dma-contig.h>
+#include <media/videobuf2-dma-sg.h>
+
+和videobuf相比，videobuf2有一个好处就是能够是一个驱动程序同时支持多种类型的buffer，上面的头文件不会相互冲突，而且videobuf2提供的这三种buffer类型的操作接口非常类似。
+
+
+
+vb2_buffer：
+结构体vb2_buffer代表一个视频缓冲区，此结构体定义在<media/videobuf2-core.h>。通常驱动程序都想保存每个缓冲区特有的信息，因此，驱动程序会自己定义一个缓冲区结构体，然后把vb2_buffer嵌入在其中。可是，videobuf2作者没有读过Neil Brown’s object-oriented design patterns in the kernel(内核中的面向对象设计模型)，没有提供分配这些结构体的函数。这就意味着驱动程序需要把自定义结构体的大小通知videobuf2子系统，而且vb2_buffer实例必须放在自定义结构体的第一个成员域。
+
+
+struct vb2_ops v4l2_qops = {
+	.queue_setup        = vpu_queue_setup,
+	.wait_prepare       = vpu_prepare,
+	.wait_finish        = vpu_finish,
+	.buf_prepare        = vpu_buf_prepare,
+	.start_streaming    = vpu_start_streaming,
+	.stop_streaming     = vpu_stop_streaming,
+	.buf_queue          = vpu_buf_queue,
+};
+
+
+int (*queue_setup)(struct vb2_queue *q, unsigned int *num_buffers,
+                                                unsigned int *num_planes, unsigned long sizes[],
+                                                void *alloc_ctxs[]);
+queue_setup()在用户空间执行ioctl:VIDIOC_REQBUFS操作时被调用，作用是用来建立缓冲队列。结构体vb2_queue用来描述缓冲队列，num_buffers参数是应用程序申请的缓冲数。Num_planes是每个buffer中的视频层数目。Size数组包含了每个视频层的大小(bytes)。
+
+Alloc_ctxs指针数组包含了每个视频层的“分配上下文”，当前还只被contiguous DMA模式使用到。使用contiguous DMA的驱动程序需要调用获取/注销上下文信息：
+void *vb2_dma_contig_init_ctx(struct device *dev)
+voidvb2_dma_contig_cleanup_ctx(void *alloc_ctx)
+
+
+void (*wait_prepare)(struct vb2_queue *q);
+void (*wait_finish)(struct vb2_queue *q);
+Videobuf2子系统调用到驱动的回调函数前应该先获取到设备访问锁。比如，用户空间获取视频数据会导致start_streaming()调用，需要通过videobuf2子系统调用到相关的设备驱动程序，所以调用start_streaming()时，将要持有设备锁。
+在这样的情况下，有一个需要考虑的问题：用户空间调用ioctl:VIDIOC_DQBUF从内核获取缓冲区的数据，当缓冲区不可用时，进程可能会阻塞。
+
+在进行VIDIOC_DQBUF操作阻塞等待一个buffer数据之前调用wait_prepare()去释放设备锁，一旦退出阻塞，会调用wait_finish()获取设备锁。可能这两个回调函数用release_lock()和reacquire_lock()名字更好。
+
+
+buf_prepare()在用户空间入队这些buffer时被调用(比如，响应VIDIOC_QBUF操作)，在这些buffer被流I/O使用之前完成一些必要的准备工作。
+调用Buf_queue()把buffers传递给驱动程序，开始流I/O操作。
+(注：buf_queue是响应VIDIOC_STREAMON操作，开始流IO操作，然后会往buffers中填充视频数据。)
+
+Buf_finish()在buffers传回到用户空间前被调用，你可能需要对这个回调函数考虑的问题是，驱动程序已经知道buffer有一帧新的数据传递到用户空间，事实上，还需要告诉videobuf2。一个可能的答案是完成流I/O 数据到buffer的操作通常是在中断上下文处理的，而buf_finish()会在进程上下文调用。
+(注：buf_finish()在每个buffer出队传递到用户空间前被调用，通常在用户空间访问buffers前做一些必要操作。)
+
+Buf_cleanup()在buffer释放前被调用，用来做一些清理工作。
+
+
+
+int (*start_streaming)(struct vb2_queue *q);
+int (*stop_streaming)(struct vb2_queue *q);
+start_streaming()用来响应ioctl:VIDIOC_STREAMON操作开始抓取视频数据，如果驱动程序实现了read()方法也会调用到start_streaming()。Stop_streaming()用来响应ioctl:VIDIOC_STREAMOFF操作停止抓取视频数据，等待DMA停止后函数才会返回。这里值得注意的是，调用stop_streaming()后，videobuf2子系统会回收掉所有传递到驱动程序的buffers，此时驱动程序不能访问这些buffers。
+
+
+Queue setup:
+1.构建vb2_ops,并实现其中的回调函数：
+static const struct vb2_ops my_special_callbacks = {
+                                         .queue_setup = my_special_queue_setup,
+                                         /* ... */
+    };
+
+2.建立一个videobuf2队列(通常是在设备注册或者设备open的时候)，驱动需要分配一个vb2_queue结构体：
+struct vb2_queue {
+    enum v4l2_buf_type  type;
+    unsigned int  io_modes;
+    unsigned int  io_flags;
+    const struct vb2_ops  *ops;
+    const struct vb2_mem_ops  *mem_ops;
+    void  *drv_priv;
+    unsigned int buf_struct_size;
+    /* Lots of private stuff omitted */
+};
+
+这个结构体需要实现上面的成员，type代表buffer类型，通常是V4L2_BUF_TYPE_VIDEO_CAPTURE，io_modes是一个标志位，用来描述以何种方式来访问buffer：
+
+VB2_MMAP：缓冲区由内核空间分配，通过mmap映射缓冲区到用户空间。通常vmalloc和contiguous DMA buffers来分配此方式的缓冲区；
+
+VB2_USERPTR：缓冲区由用户空间分配，通常需要设备支持集散IO才可以分配用户空间缓冲区。有趣的是，videobuf2支持分配连续的缓冲区在用户空间，但是需要运用一些特别的机制，比如android的pmem驱动。在用户空间分配连续大量的页面是不支持的。
+
+VB2_READ，VB2_WRITE：用户空间缓冲区提供read()和write()方式访问视频设备。
+
+Mem_ops成员是缓冲区操作函数集合，提供给上层videobuf2子系统操作缓冲区，内核已经实现三组供我们使用： vb2_vmalloc_memops,vb2_dma_contig_memops和 vb2_dma_sg_memops，如果这三组都不符合，驱动工程师可以自己实现一组。在撰写本文时，内核主线还有没有提供内存操作的驱动程序。
+
+最后，drv_priv是驱动私有的指针(通常指向device结构)，buf_struct_size用于表示buffer结构体的大小。Vb2_queue结构体实现后，调用以下函数进行初始化：
+intvb2_queue_init(struct vb2_queue *q)
+
+在设备关闭时调用 vb2_queue_release()进行销毁。
+
+
+
+
+Device operations：
+到现在我们已经分析了videobuf2底层的基础设施，接下来看下videobuf2子系统是怎么把用户空间的操作和视频设备驱动关联起来。通常第一步驱动程序需要实现大量的ioctl()调用接口，大部分的函数接口只是简单的获取设备锁，然后直接调用videobuf2实现的ops。下面我们来看这些ops：
+
+int vb2_querybuf(struct vb2_queue *q, struct v4l2_buffer *b);
+
+int vb2_reqbufs(struct vb2_queue *q, struct v4l2_requestbuffers *req);
+
+int vb2_qbuf(struct vb2_queue *q, struct v4l2_buffer *b);
+
+int vb2_dqbuf(struct vb2_queue *q, struct v4l2_buffer *b, 
+                                           bool nonblocking);
+
+int vb2_streamon(struct vb2_queue *q, enum v4l2_buf_type type);
+
+int vb2_streamoff(struct vb2_queue *q, enum v4l2_buf_type type);
+
+int vb2_mmap(struct vb2_queue *q, struct vm_area_struct *vma);
+
+unsigned int vb2_poll(struct vb2_queue *q, struct file *file, 
+                                                               poll_table *wait);
+size_t vb2_read(struct vb2_queue *q, char __user *data, size_t count,
+                                             loff_t *ppos, int nonblock);
+size_t vb2_write(struct vb2_queue *q, char __user *data, size_t count,
+                                              loff_t *ppos, int nonblock);
+这些函数接口屏蔽了底层大量缓冲区管理的细节，使代码十分简洁，提供了统一的接口给上层调用。
+
+最后还有一点工作需要做：获取数据放到缓冲区里。对于vmalloc buffers，通常是通过memcpy()这样的操作来完成，但是videobuf2提供了一个有用函数：
+
+void *vb2_plane_vaddr(struct vb2_buffer*vb, unsigned int plane_no)
+返回在缓冲区中给定的内核虚拟地址。
+
+
+Contiguous DMA驱动需要获取处理
+dma_addr_t vb2_dma_contig_plane_paddr(struct vb2_buffer *vb, 
+                                          unsigned int plane_no);
+
+对于scatter/gather DMA驱动，提供的接口略显复杂：
+struct vb2_dma_sg_desc {
+                    unsigned long                                   size;
+                    unsigned int                                      num_pages;
+                    struct scatterlist         *sglist;
+};
+
+static inline struct vb2_dma_sg_desc *vb2_dma_sg_plane_desc(
+                                         struct vb2_buffer *vb, unsigned int plane_no)
+驱动程序从videobuf2获取到能用于设备的scatterlist。
+
+对于这三种情况，缓冲区将会填充满需要传递到用户空间的帧数据。Vb2_buffer结构体中内嵌了一个v4l2_buf，通常包含图像大小、序列号、时间帧等信息。
+
+
+最后调用以下函数：
+void vb2_buffer_done(struct vb2_buffer *vb,enum vb2_buffer_state state)
+
+state参数：
+VB2_BUF_STATE_DONE，通知videobuf2子系统有一个buffer处理完成；
+
+VB2_BUF_STATE_ERROR，通知videobuf2子系统有一个buffer处理时出现ERROR。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

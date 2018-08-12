@@ -1,0 +1,155 @@
+workqueue
+参考链接：https://blog.csdn.net/liuxd3000/article/details/7700247
+
+优点：
+使用简单.
+执行在进程上下文, 从而可以睡眠, 被调度和抢占.
+在多核环境下使用也非常友好.
+
+
+基本术语：
+workqueue: 所有工作项(需要被执行的工作)被排列于该队列.
+worker thread: 是一个用于执行 workqueue 中各个工作项的内核线程, 当 workqueue 中没有工作项时, 该线程将变为 idle 状态.
+single threaded(ST): worker thread 的表现形式之一, 在系统范围内, 只有一个 worker thread 为 workqueue 服务.
+multi threaded(MT): worker thread 的表现形式之一, 在多 CPU 系统上每个 CPU 上都有一个 worker thread 为 workqueue 服务.
+
+
+使用步骤
+创建 workqueue(如果使用内核默认的 workqueue, 此步骤略过).
+创建工作项 work_struct.
+向 workqueue 提交工作项.
+工作项
+
+
+数据结构
+struct work_struct {
+    atomic_long_t data;
+    struct list_head entry;
+    work_func_t func;
+    struct lockdep_map lockdep_map;
+};
+
+struct delayed_work {
+    struct work_struct work;
+    struct timer_list timer;
+};
+
+
+静态地创建工作项:
+DECLARE_WORK(n, f)     //n: work_struct name;  f: func
+DECLARE_DELAYED_WORK(n, f)
+
+动态地创建工作项:
+INIT_WORK(struct work_struct work, work_func_t func); 
+PREPARE_WORK(struct work_struct work, work_func_t func); 
+INIT_DELAYED_WORK(struct delayed_work work, work_func_t func); 
+PREPARE_DELAYED_WORK(struct delayed_work work, work_func_t func); 
+
+
+内核默认的 workqueue
+查阅源码可知, 内核默认的全局 workqueue 应为:
+// 定义
+static struct workqueue_struct *keventd_wq __read_mostly;
+// 初始化
+...
+keventd_wq = create_workqueue("events"); // MT worker thread 模式.
+...
+// 确认对应的内核线程数目, 应等于 CPU 核数
+$ lscpu
+Architecture:          x86_64
+CPU(s):                3
+Thread(s) per core:    1
+$ ps aux | grep "events"
+root         9  0.0  0.0      0     0 ?        S    Feb09   1:15 [events/0]
+root        10  0.0  0.0      0     0 ?        S    Feb09   0:59 [events/1]
+root        11  0.0  0.0      0     0 ?        S    Feb09   0:59 [events/2]
+
+工作项加入 keventd_wq 由下面两个函数之一完成:
+int schedule_work(struct work_struct *work)
+{
+    return queue_work(keventd_wq, work);
+}
+int schedule_delayed_work(struct delayed_work *dwork, unsigned long delay)
+{
+    return queue_delayed_work(keventd_wq, dwork, delay);
+}
+
+用户自定义的 workqueue
+创建 workqueue:
+	create_singlethread_workqueue(name) // 仅对应一个内核线程
+	create_workqueue(name) // 对应多个内核线程, 同上文.
+向 workqueue 中提交工作项:
+	int queue_work(workqueue_t *queue, work_t *work); 
+	int queue_delayed_work(workqueue_t *queue, work_t *work, unsigned long delay); 
+取消 workqueue 中挂起的工作项以及释放 workqueue 此处略过.
+	刷新等待队列函数：
+	/*kernel/workqueue.c*/
+	void flush_workqueue(struct workqueue_struct *wq)
+	该函数会一直等待，知道指定的等待队列中所有的任务都执行完毕并从等待队列中移除。
+	注销等待队列：
+	/*kernel/workqueue.c*/
+	void destroy_workqueue(struct workqueue_struct *wq)
+	该函数是是创建等待队列的反操作，注销掉指定的等待队列。
+
+
+
+example：
+#include <linux/module.h>
+#include <linux/init.h>
+#include <linux/workqueue.h>
+
+static struct workqueue_struct *queue = NULL;
+static struct work_struct work;
+
+static void work_handler(struct work_struct *data)
+{
+    printk(KERN_ALERT "work handler for work_item in queue helloworkqueue\n");
+    // workqueue 中的每个工作完成之后就被移除 workqueue.
+    // 下面的语句会造成"死机", 原因可能是该 workqueue 占据了所有的 CPU 时间.
+    // queue_work(queue, &work);
+}
+
+static int __init test_init(void)
+{
+    queue = create_singlethread_workqueue("helloworkqueue");
+    if (!queue)
+    {   
+        goto err;
+    }   
+    INIT_WORK(&work, work_handler);
+    queue_work(queue, &work);
+
+    return 0;
+err:
+    return -1; 
+}
+
+static void __exit test_exit(void)
+{
+    destroy_workqueue(queue);
+}
+
+MODULE_LICENSE("GPL");
+module_init(test_init);
+module_exit(test_exit);
+
+Makefile:
+
+obj-m := wq.o
+default:
+    make -C /usr/src/linux-2.6.32.12-0.7 M=`pwd` modules
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

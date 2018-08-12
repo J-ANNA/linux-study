@@ -1,3 +1,11 @@
+参考链接：
+https://blog.csdn.net/fan0520/article/details/52153836
+https://www.cnblogs.com/edver/p/7260696.html
+http://blog.chinaunix.net/uid-25014876-id-90740.html
+
+
+中断是指在CPU正常运行期间，由于内外部事件或由程序预先安排的事件引起的CPU暂时停止正在运行的程序，转而为该内部或外部事件或预先安排的事件服务的程序中去，服务完毕后再返回去继续运行被暂时中断的程序。
+
 中断类型：
 	外部中断：普通中断请求（IRQ）, 快速中断请求（FIQ）
 	异常中断: 由于处理器执行指令出错
